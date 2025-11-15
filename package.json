@@ -1,0 +1,66 @@
+{
+  "name": "react-escpos",
+  "version": "1.0.9",
+  "description": "Convert React components (especially @react-pdf/renderer) to ESC/POS thermal printer commands",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "prepublishOnly": "npm run build",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "release:patch": "npm version patch && git push --follow-tags && npm publish",
+    "release:minor": "npm version minor && git push --follow-tags && npm publish",
+    "release:major": "npm version major && git push --follow-tags && npm publish"
+  },
+  "keywords": [
+    "escpos",
+    "thermal-printer",
+    "receipt",
+    "pos",
+    "react",
+    "react-pdf",
+    "printer",
+    "thermal",
+    "ticket",
+    "receipt-printer",
+    "pos-printer",
+    "cp860",
+    "portuguese"
+  ],
+  "author": "Gabriel Martinusso",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gmartinu/react-escpos.git"
+  },
+  "bugs": {
+    "url": "https://github.com/gmartinu/react-escpos/issues"
+  },
+  "homepage": "https://github.com/gmartinu/react-escpos#readme",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "peerDependencies": {
+    "@react-pdf/renderer": "^3.0.0",
+    "react": "^16.8.0 || ^17.0.0 || ^18.0.0"
+  },
+  "dependencies": {
+    "react-test-renderer": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.4",
+    "@types/react-test-renderer": "^19.1.0",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
