@@ -1,6 +1,6 @@
 {
   "name": "react-escpos",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Convert React components (especially @react-pdf/renderer) to ESC/POS thermal printer commands",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
