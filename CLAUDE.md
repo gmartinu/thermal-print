@@ -33,6 +33,7 @@ npm run release:major   # 1.0.0 → 2.0.0
 ```
 
 These commands automatically:
+
 1. Bump version in package.json
 2. Create Git tag
 3. Push to remote with tags
@@ -60,6 +61,7 @@ The conversion happens in 4 main steps (see `src/index.ts:36-76`):
 - All components normalize to: `document`, `page`, `view`, `text`, `image`
 
 **Example**:
+
 ```typescript
 // Custom adapter maps Receipt → document, Item → text
 adapter: { Receipt: 'document', Item: 'text' }
@@ -70,31 +72,35 @@ adapter: { Receipt: 'document', Item: 'text' }
 **Purpose**: Low-level ESC/POS command generation and buffer management
 
 **Key responsibilities**:
+
 - Maintains printer state (alignment, bold, size, encoding)
 - Generates raw ESC/POS byte sequences
 - Handles paper width calculations (characters per line)
 - Supports CP860 encoding for Portuguese characters
 - Manages paper cutting commands (full/partial)
 
-**Important**: Font size commands are disabled (lines 139-145) because GS ! command (0x1D 0x21) was being interpreted as text on some printers. Only bold is used for text emphasis.
+**Important**: Uses ESC ! command (0x1B 0x21) for character sizing instead of GS ! command for better printer compatibility. The ESC ! command combines both size (up to 2x2) and bold emphasis in a single command. This avoids issues with printers like Bematech MP-4200 TH that don't support GS ! properly.
 
 #### 3. TreeTraverser (`src/traverser.ts`)
 
 **Purpose**: Walks the ElementNode tree and orchestrates ESC/POS generation
 
 **Key layout modes**:
+
 - **Column layout** (default): Stacks elements vertically
 - **Row layout** (`flexDirection: 'row'`): Side-by-side columns with width calculations
   - Special handling for `justifyContent: 'space-between'` (receipt payment-style layout)
   - Fixed-width columns for table layouts
 
 **Critical behavior**:
+
 - Text alignment is inherited from child Text nodes, not View containers (lines 140-155)
 - Row layouts with single child render normally to prevent flattening nested layouts
 
 #### 4. ESC/POS Commands (`src/commands/escpos.ts`)
 
 Raw ESC/POS byte sequences and encoding utilities:
+
 - Text alignment (ESC a n)
 - Bold (ESC E n)
 - Paper cutting (ESC i for full cut, ESC m for partial cut)
@@ -104,8 +110,9 @@ Raw ESC/POS byte sequences and encoding utilities:
 #### 5. Style Processing (`src/styles.ts`)
 
 Converts React/CSS-like styles to ESC/POS commands:
-- `fontSize` → ESC/POS text sizes (currently disabled, see generator.ts note)
-- `fontWeight: 'bold'` → ESC E 1
+
+- `fontSize` → ESC ! text sizes (1x1, 1x2, 2x1, 2x2 max)
+- `fontWeight: 'bold'` → ESC ! with emphasis bit set
 - `textAlign` → ESC a 0/1/2
 - `flexDirection: 'row'` → Row layout processing
 - `borderTop/borderBottom` → Divider lines (solid/dashed)
@@ -114,7 +121,10 @@ Converts React/CSS-like styles to ESC/POS commands:
 ### Critical Design Decisions
 
 1. **Line Spacing**: Set to 10 dots (tight spacing) by default in `generator.ts:92` for compact receipts
-2. **Font Sizes Disabled**: GS ! command caused issues on some printers - only bold is used for emphasis
+2. **Font Size Command**: Uses ESC ! (0x1B 0x21) instead of GS ! (0x1D 0x21) for better printer compatibility
+   - Limited to 2x2 maximum character size (1x1, 1x2, 2x1, 2x2)
+   - Combines size and bold/emphasis in a single command
+   - Avoids text rendering issues on printers like Bematech MP-4200 TH
 3. **CP860 Encoding**: Default encoding supports Brazilian Portuguese characters (ç, á, é, etc.)
 4. **Paper Width**: Default 48 characters (80mm thermal printers). Common values:
    - 58mm = 32 chars
@@ -132,6 +142,7 @@ Converts React/CSS-like styles to ESC/POS commands:
 ## Character Encoding Notes
 
 The library uses **CP860** (Code Page 860) by default for Brazilian Portuguese support. When adding new encoding features:
+
 - Character mapping is in `src/encodings/cp860.ts`
 - Unsupported characters are replaced with '?' (0x3F)
 - UTF-8 is accepted as input but converted to CP860 for printer compatibility
@@ -154,6 +165,7 @@ The library uses **CP860** (Code Page 860) by default for Brazilian Portuguese s
 ### Testing with Real Printers
 
 No automated tests exist. Manual testing workflow:
+
 1. Run `npm run build`
 2. Create test script importing from `dist/`
 3. Generate ESC/POS buffer with `convertToESCPOS()`
@@ -194,3 +206,9 @@ src/
 - Automated via GitHub Actions when pushing to `main` branch
 - Version bumps create Git tags automatically
 - See `PUBLISHING.md` for detailed publishing setup instructions
+
+## PDF Processing
+
+## NEVER use the Read tool to open PDF files directly
+
+## ALWAYS extract PDFs to text first using pdftotext via Bash before processing

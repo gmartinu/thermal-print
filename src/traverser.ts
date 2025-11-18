@@ -124,8 +124,9 @@ export class TreeTraverser {
     const viewStyle = extractViewStyle(node.style);
     const paperWidth = this.generator.getPaperWidth();
 
-    // Check if this is a "space-between" layout (payment-style two-column)
+    // Check layout justification mode
     const isSpaceBetween = viewStyle.justifyContent === "space-between";
+    const isCentered = viewStyle.justifyContent === "center";
 
     // Calculate column widths
     const columns: { node: ElementNode; width: number; content: string; align: "left" | "center" | "right" }[] = [];
@@ -173,6 +174,19 @@ export class TreeTraverser {
       const gap = Math.max(1, paperWidth - usedSpace);
 
       rowText = columns[0].content + " ".repeat(gap) + columns[1].content;
+    } else if (isCentered && !hasExplicitWidths) {
+      // Center the entire row on the paper by calculating total content width
+      // and adding leading spaces
+      const totalContentWidth = columns.reduce((sum, col) => sum + col.content.length, 0);
+
+      // Calculate leading spaces to center the entire row
+      const leadingSpaces = Math.max(0, Math.floor((paperWidth - totalContentWidth) / 2));
+
+      // Build row with leading spaces (center entire row)
+      rowText = " ".repeat(leadingSpaces);
+      for (let i = 0; i < columns.length; i++) {
+        rowText += columns[i].content;
+      }
     } else {
       // Normal column layout OR space-between with explicit widths (use column padding)
       for (let i = 0; i < columns.length; i++) {

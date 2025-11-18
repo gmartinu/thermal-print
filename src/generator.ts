@@ -1,16 +1,4 @@
-import {
-  ALIGN_CENTER,
-  ALIGN_LEFT,
-  ALIGN_RIGHT,
-  BOLD_OFF,
-  BOLD_ON,
-  encodeText,
-  feedLines,
-  generateQRCode,
-  generateRasterImage,
-  INIT,
-  setLineSpacing,
-} from "./commands/escpos";
+import { encodeText } from "./commands/escpos";
 import {
   extractTextStyle,
   extractViewStyle,
@@ -21,6 +9,7 @@ import {
   mapTextAlign,
 } from "./styles";
 import { ConversionContext } from "./types";
+import { CommandAdapter, ESCPOSCommandAdapter } from "./command-adapters";
 
 /**
  * Simple buffer implementation for accumulating ESC/POS commands
@@ -65,22 +54,31 @@ class ESCPOSBuffer {
 export class ESCPOSGenerator {
   private buffer: ESCPOSBuffer;
   private context: ConversionContext;
+  private commandAdapter: CommandAdapter;
 
-  constructor(paperWidth = 48, encoding = "cp860", debug = false) {
+  constructor(
+    paperWidth = 48,
+    encoding = "cp860",
+    debug = false,
+    commandAdapter?: CommandAdapter
+  ) {
     this.buffer = new ESCPOSBuffer();
+
+    // Use provided adapter or default to ESC/POS
+    this.commandAdapter = commandAdapter || new ESCPOSCommandAdapter();
 
     this.context = {
       paperWidth,
       currentAlign: "left",
-      currentSize: "normal",
+      currentSize: { width: 1, height: 1 },
       currentBold: false,
       encoding,
       debug,
       buffer: [],
     };
 
-    // Initialize printer
-    this.buffer.pushArray(INIT);
+    // Initialize printer using command adapter
+    this.buffer.pushArray(this.commandAdapter.getInitCommand());
   }
 
   /**
@@ -94,55 +92,63 @@ export class ESCPOSGenerator {
   }
 
   /**
-   * Set line spacing using raw ESC/POS commands
+   * Set line spacing using command adapter
    * @param dots - Line spacing in dots (0-255). Use 0 for minimal spacing, undefined for default (1/6 inch)
    */
   setLineSpacing(dots?: number): void {
-    if (dots === undefined) {
-      // Reset to default spacing (1/6 inch) - ESC 2 (0x1B 0x32)
-      this.buffer.push(0x1b, 0x32);
-    } else {
-      // Set custom line spacing in dots - ESC 3 n (0x1B 0x33 n)
-      const spacing = Math.max(0, Math.min(255, dots));
-      this.buffer.pushArray(setLineSpacing(spacing));
-    }
+    const command = this.commandAdapter.getLineSpacingCommand(dots);
+    this.buffer.pushArray(command);
   }
 
   /**
-   * Set text alignment
+   * Set text alignment using command adapter
    */
   setAlign(align: "left" | "center" | "right"): void {
     if (this.context.currentAlign !== align) {
-      const alignCommands = {
-        left: ALIGN_LEFT,
-        center: ALIGN_CENTER,
-        right: ALIGN_RIGHT,
-      };
-      this.buffer.pushArray(alignCommands[align]);
+      const command = this.commandAdapter.getAlignCommand(align);
+      this.buffer.pushArray(command);
       this.context.currentAlign = align;
     }
   }
 
   /**
    * Set text bold
+   * Uses ESC ! command which combines size and emphasis
    */
   setBold(bold: boolean): void {
     if (this.context.currentBold !== bold) {
-      this.buffer.pushArray(bold ? BOLD_ON : BOLD_OFF);
       this.context.currentBold = bold;
+      this.applyPrintMode();
     }
   }
 
   /**
-   * Set text size
+   * Set text size using width and height multipliers
+   * Uses ESC ! command which combines size and emphasis
+   * @param size - Character size as {width, height} multipliers (max 2x2 for ESC !)
    */
-  setSize(size: "normal" | "double-width" | "double-height" | "quad"): void {
-    // Disable all size commands as they're causing '!' to print on some printers
-    // The GS ! command (0x1D 0x21) is being interpreted as text instead of command
-    // All text will use the printer's default size - bold will provide emphasis
+  setSize(size: { width: number; height: number }): void {
+    // Only update if size actually changed
+    if (
+      this.context.currentSize.width !== size.width ||
+      this.context.currentSize.height !== size.height
+    ) {
+      this.context.currentSize = size;
+      this.applyPrintMode();
+    }
+  }
 
-    // Just update state without sending any commands to printer
-    this.context.currentSize = size;
+  /**
+   * Apply current print mode (size + bold) using command adapter
+   * This combines character size and emphasis into a single command
+   */
+  private applyPrintMode(): void {
+    const command = this.commandAdapter.getCharacterSizeCommand(
+      this.context.currentSize.width,
+      this.context.currentSize.height,
+      this.context.currentBold
+    );
+    this.buffer.pushArray(command);
   }
 
   /**
@@ -151,7 +157,7 @@ export class ESCPOSGenerator {
   resetFormatting(): void {
     this.setAlign("left");
     this.setBold(false);
-    this.setSize("normal");
+    this.setSize({ width: 1, height: 1 });
   }
 
   /**
@@ -166,24 +172,19 @@ export class ESCPOSGenerator {
   }
 
   /**
-   * Add newline
+   * Add newline using command adapter
    */
   addNewline(count = 1): void {
-    // Use direct LF (0x0A) characters for line breaks
-    // ESC d command requires print buffer and doesn't always work
-    for (let i = 0; i < count; i++) {
-      this.buffer.push(0x0a); // LF - Line Feed
-    }
+    const command = this.commandAdapter.getLineFeedCommand(count);
+    this.buffer.pushArray(command);
   }
 
   /**
-   * Add line feed
+   * Add line feed using command adapter
    */
   addLineFeed(lines = 1): void {
-    // Use direct LF (0x0A) characters for line breaks
-    for (let i = 0; i < lines; i++) {
-      this.buffer.push(0x0a); // LF - Line Feed
-    }
+    const command = this.commandAdapter.getLineFeedCommand(lines);
+    this.buffer.pushArray(command);
   }
 
   /**
@@ -197,13 +198,15 @@ export class ESCPOSGenerator {
   }
 
   /**
-   * Add QR code
+   * Add QR code using command adapter
    */
   addQRCode(data: string, size = 6): void {
     try {
-      const qrCommands = generateQRCode(data, size);
-      this.buffer.pushArray(qrCommands);
-      this.addNewline();
+      const command = this.commandAdapter.getQRCodeCommand(data, size);
+      if (command.length > 0) {
+        this.buffer.pushArray(command);
+        this.addNewline();
+      }
     } catch (error) {
       // QR code generation failed - silently ignore
     }
@@ -290,9 +293,11 @@ export class ESCPOSGenerator {
         }
       }
 
-      // Generate and add raster image command
-      const imageCommands = generateRasterImage(bitmapData, width, height);
-      this.buffer.pushArray(imageCommands);
+      // Generate and add raster image command using command adapter
+      const imageCommand = this.commandAdapter.getRasterImageCommand(bitmapData, width, height);
+      if (imageCommand.length > 0) {
+        this.buffer.pushArray(imageCommand);
+      }
     } catch (error) {
       console.warn("Failed to process image:", error);
       // Silently fail - don't crash if image processing fails
@@ -338,41 +343,39 @@ export class ESCPOSGenerator {
   }
 
   /**
-   * Cut paper with full cut (raw command)
-   * Uses ESC i (0x1B 0x69) - tested and working on Bematech MP-4200 TH
+   * Cut paper with full cut using command adapter
    */
   cutFull(): void {
-    this.buffer.push(0x1b, 0x69); // ESC i - full cut
+    const command = this.commandAdapter.getCutCommand('full');
+    this.buffer.pushArray(command);
   }
 
   /**
-   * Cut paper with partial cut (raw command)
-   * Uses ESC m (0x1B 0x6D) - tested and working on Bematech MP-4200 TH
+   * Cut paper with partial cut using command adapter
    */
   cutPartial(): void {
-    this.buffer.push(0x1b, 0x6d); // ESC m - partial cut
+    const command = this.commandAdapter.getCutCommand('partial');
+    this.buffer.pushArray(command);
   }
 
   /**
-   * Cut paper with feed then full cut (raw command)
-   * Feed lines manually then send ESC i
+   * Cut paper with feed then full cut using command adapter
    * @param lines - Number of lines to feed before cutting (1-255)
    */
   cutFullWithFeed(lines = 3): void {
     const feedCount = Math.max(1, Math.min(255, lines));
-    this.buffer.pushArray(feedLines(feedCount));
-    this.buffer.push(0x1b, 0x69); // ESC i - full cut
+    const command = this.commandAdapter.getCutCommand('full', feedCount);
+    this.buffer.pushArray(command);
   }
 
   /**
-   * Cut paper with feed then partial cut (raw command)
-   * Feed lines manually then send ESC m
+   * Cut paper with feed then partial cut using command adapter
    * @param lines - Number of lines to feed before cutting (1-255)
    */
   cutPartialWithFeed(lines = 3): void {
     const feedCount = Math.max(1, Math.min(255, lines));
-    this.buffer.pushArray(feedLines(feedCount));
-    this.buffer.push(0x1b, 0x6d); // ESC m - partial cut
+    const command = this.commandAdapter.getCutCommand('partial', feedCount);
+    this.buffer.pushArray(command);
   }
 
   /**

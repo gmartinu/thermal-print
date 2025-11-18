@@ -51,28 +51,39 @@ export function isBold(style: TextStyle): boolean {
 }
 
 /**
- * Maps fontSize to ESC/POS text size
+ * Maps fontSize to ESC/POS character size (width x height multipliers)
  *
- * Note: PDF uses zoom factor (default 0.46), so actual sizes are smaller:
+ * Font size mapping using ESC ! command (limited to 2x2 maximum):
+ * - 8-12px  → 1x1 (normal)
+ * - 13-18px → 1x2 (normal width, double height)
+ * - 19-24px → 2x1 (double width, normal height)
+ * - 25+px   → 2x2 (double width, double height)
+ *
+ * Note: ESC ! command only supports up to 2x2 character size.
+ * Larger sizes (3x, 4x, etc.) would require GS ! command which may not
+ * be supported on all thermal printers (e.g., Bematech MP-4200 TH).
+ *
+ * PDF uses zoom factor (default 0.46), so actual sizes are smaller:
  * - 16 * 0.46 = 7.36 (normal text)
  * - 18 * 0.46 = 8.28 (medium text)
  * - 20 * 0.46 = 9.2 (title text)
  *
  * We use raw fontSize values (ignoring zoom) for better differentiation
  */
-export function mapFontSizeToESCPOS(fontSize?: number | string): "normal" | "double-width" | "double-height" | "quad" {
-  if (!fontSize) return "normal";
+export function mapFontSizeToESCPOS(fontSize?: number | string): { width: number; height: number } {
+  // Default to 1x1 (normal size)
+  if (!fontSize) return { width: 1, height: 1 };
 
   // Parse fontSize if it's a string (e.g., "8.28px")
   const size = typeof fontSize === "string" ? parseFloat(fontSize) : fontSize;
 
-  if (isNaN(size)) return "normal";
+  if (isNaN(size)) return { width: 1, height: 1 };
 
-  // Use raw fontSize values (before zoom is applied)
-  if (size >= 24) return "quad"; // Extra large (2x2)
-  if (size >= 20) return "double-height"; // Titles (1x2)
-  if (size >= 18) return "double-width"; // Medium headers (2x1)
-  return "normal"; // Regular text (1x1)
+  // Map font size to character multipliers (max 2x2 for ESC ! compatibility)
+  if (size >= 25) return { width: 2, height: 2 }; // 25+px → 2x2 (maximum)
+  if (size >= 19) return { width: 2, height: 1 }; // 19-24px → 2x1
+  if (size >= 13) return { width: 1, height: 2 }; // 13-18px → 1x2
+  return { width: 1, height: 1 }; // 8-12px → 1x1 (normal)
 }
 
 /**
