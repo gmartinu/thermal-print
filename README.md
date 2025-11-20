@@ -6,13 +6,16 @@ A modular TypeScript library suite for thermal printing with clean, standalone a
 
 ```
 React Components → PrintNode (IR) → ESC/POS Buffer → Thermal Printer
+                ↓
+              HTML/DOM → PDF (Browser Printing)
 ```
 
 **Clean separation of concerns:**
 
 - **@thermal-print/core** - Universal `PrintNode` intermediate representation (IR)
-- **@thermal-print/react** - React components + PrintNode converter
+- **@thermal-print/react** - React components + PrintNode converter + HTML converter
 - **@thermal-print/escpos** - PrintNode → ESC/POS buffer converter
+- **@thermal-print/pdf** - DOM → PDF converter (framework-agnostic)
 
 ## 📦 Packages
 
@@ -26,13 +29,26 @@ pnpm add @thermal-print/react
 
 **Exports:**
 
-- Components: `Document`, `Page`, `View`, `Text`, `Image`
-- Utilities: `StyleSheet`, `Font`, `Preview`
-- Functions: `convertToESCPOS()`, `convertToPrintNodes()`
+- Components: `Document`, `Page`, `View`, `Text`, `Image`, `Preview`
+- Utilities: `StyleSheet`, `Font`
+- Functions: `convertToESCPOS()`, `convertToPrintNodes()`, `convertToHTML()`
+
+### [@thermal-print/pdf](./packages/pdf) - PDF Generation
+
+Framework-agnostic PDF generation from DOM elements. Perfect for browser printing.
+
+```bash
+pnpm add @thermal-print/pdf
+```
+
+**Exports:**
+
+- Function: `convertToPDF(elementOrId, options)`
+- Supports standard and thermal paper sizes (A4, Letter, 80mm, 58mm)
 
 ### [@thermal-print/escpos](./packages/escpos) - ESC/POS Converter
 
-Converts PrintNode trees to ESC/POS commands.
+Converts PrintNode trees to ESC/POS commands for thermal printers.
 
 ```bash
 pnpm add @thermal-print/escpos
@@ -123,6 +139,42 @@ function App() {
       </Preview>
     </div>
   );
+}
+```
+
+### Browser Printing with PDF
+
+```typescript
+import { convertToHTML } from "@thermal-print/react";
+import { convertToPDF } from "@thermal-print/pdf";
+
+async function printReceipt() {
+  // Step 1: Render React component to DOM
+  const htmlResult = await convertToHTML(
+    <Document>
+      <Page>
+        <Text>Receipt Content</Text>
+      </Page>
+    </Document>,
+    {
+      containerId: "thermal-receipt",
+      keepInDOM: true,
+      width: 600,
+    }
+  );
+
+  // Step 2: Convert DOM to PDF
+  const pdfResult = await convertToPDF("thermal-receipt", {
+    paperSize: "80mm",
+    scale: 2,
+  });
+
+  // Step 3: Open print dialog
+  window.open(pdfResult.url);
+
+  // Step 4: Cleanup
+  htmlResult.cleanup();
+  pdfResult.cleanup();
 }
 ```
 
@@ -262,27 +314,52 @@ pnpm install
 # Build all packages
 pnpm run build
 
-# Build specific package
+# Build specific packages
+pnpm run build:core
+pnpm run build:escpos
 pnpm run build:react
+pnpm run build:pdf
 
-# Clean
+# Watch mode
+pnpm run dev
+
+# Clean build artifacts
 pnpm run clean
 ```
 
-## 📝 No More @react-pdf/renderer!
+## 📦 Publishing
 
-This library is now **fully standalone** - no dependency on `@react-pdf/renderer`.
+```bash
+# Publish individual packages
+pnpm run publish:core
+pnpm run publish:escpos
+pnpm run publish:react
+pnpm run publish:pdf
 
-**Migration:**
+# Publish all packages at once
+pnpm run publish:all
+
+# Version bumps
+pnpm run version:patch  # 0.1.0 → 0.1.1
+pnpm run version:minor  # 0.1.0 → 0.2.0
+pnpm run version:major  # 0.1.0 → 1.0.0
+```
+
+## 📝 Migrating from @react-pdf/renderer
+
+This library is now **fully standalone** with no dependency on `@react-pdf/renderer`.
+
+**Quick migration:**
 
 ```typescript
 // Before
 import { Document, Page, Text } from "@react-pdf/renderer";
-import { convertToESCPOS } from "@thermal-print/react";
 
 // After - Just change the import!
 import { Document, Page, Text, convertToESCPOS } from "@thermal-print/react";
 ```
+
+**Need more help?** See the comprehensive [Migration Guide](./packages/react/MIGRATION_FROM_REACT_PDF.md) for detailed instructions, API changes, and troubleshooting.
 
 ## 📄 License
 

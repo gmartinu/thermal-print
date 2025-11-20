@@ -4,9 +4,9 @@ Core type definitions for thermal printer libraries.
 
 ## 📦 Installation
 
-\`\`\`bash
+```bash
 pnpm add @thermal-print/core
-\`\`\`
+```
 
 ## 🎯 Purpose
 
@@ -18,50 +18,50 @@ This package defines the **universal intermediate representation (IR)** for ther
 
 The core data structure representing a thermal printer document.
 
-\`\`\`typescript
+```typescript
 interface PrintNode {
-  type: string;        // 'document', 'page', 'view', 'text', 'image'
-  props: any;          // Component props
+  type: string; // 'document', 'page', 'view', 'text', 'image'
+  props: any; // Component props
   children: PrintNode[]; // Child nodes
-  style?: any;         // Styling information
+  style?: any; // Styling information
 }
-\`\`\`
+```
 
 ### StandardElementType
 
 Enum of standard element types.
 
-\`\`\`typescript
+```typescript
 enum StandardElementType {
-  DOCUMENT = 'document',
-  PAGE = 'page',
-  VIEW = 'view',
-  TEXT = 'text',
-  IMAGE = 'image',
-  TEXTNODE = 'textnode'
+  DOCUMENT = "document",
+  PAGE = "page",
+  VIEW = "view",
+  TEXT = "text",
+  IMAGE = "image",
+  TEXTNODE = "textnode",
 }
-\`\`\`
+```
 
 ### TextStyle
 
 Text styling properties.
 
-\`\`\`typescript
+```typescript
 interface TextStyle {
   fontSize?: number;
   fontWeight?: string | number;
   fontFamily?: string;
-  textAlign?: 'left' | 'center' | 'right';
+  textAlign?: "left" | "center" | "right";
 }
-\`\`\`
+```
 
 ### ViewStyle
 
 Layout and container styling properties.
 
-\`\`\`typescript
+```typescript
 interface ViewStyle {
-  flexDirection?: 'row' | 'column';
+  flexDirection?: "row" | "column";
   justifyContent?: string;
   alignItems?: string;
   padding?: number;
@@ -74,7 +74,7 @@ interface ViewStyle {
   borderBottom?: string;
   width?: string | number;
 }
-\`\`\`
+```
 
 ## 🔧 Usage
 
@@ -82,23 +82,23 @@ This package is typically used indirectly through higher-level packages like `@t
 
 ### Direct Usage
 
-\`\`\`typescript
-import { PrintNode } from '@thermal-print/core';
+```typescript
+import { PrintNode } from "@thermal-print/core";
 
 const printNode: PrintNode = {
-  type: 'document',
+  type: "document",
   props: {},
   children: [
     {
-      type: 'text',
-      props: { children: 'Hello World' },
+      type: "text",
+      props: { children: "Hello World" },
       children: [],
-      style: { textAlign: 'center', fontSize: 20 }
-    }
+      style: { textAlign: "center", fontSize: 20 },
+    },
   ],
-  style: {}
+  style: {},
 };
-\`\`\`
+```
 
 ## 📄 License
 
