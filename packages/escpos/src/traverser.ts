@@ -127,6 +127,14 @@ export class TreeTraverser {
     // Calculate column widths
     const columns: { node: ElementNode; width: number; content: string; align: "left" | "center" | "right" }[] = [];
 
+    // Extract text style from the first Text node for the entire row
+    // This preserves formatting like bold, fontSize across all columns
+    let rowTextStyle: any = null;
+    const firstTextNode = this.findFirstTextNode(children[0]);
+    if (firstTextNode && firstTextNode.style) {
+      rowTextStyle = mergeStyles(firstTextNode.style);
+    }
+
     for (const child of children) {
       const childStyle = extractViewStyle(child.style);
       const width = parseWidth(childStyle.width, paperWidth);
@@ -197,8 +205,18 @@ export class TreeTraverser {
       }
     }
 
+    // Apply text style (bold, fontSize) before adding the row text
+    if (rowTextStyle) {
+      this.generator.applyTextStyle(rowTextStyle);
+    }
+
     this.generator.addText(rowText);
     this.generator.addNewline();
+
+    // Reset formatting after the row
+    if (rowTextStyle) {
+      this.generator.resetFormatting();
+    }
   }
 
   /**

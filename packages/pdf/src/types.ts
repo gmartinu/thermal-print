@@ -65,10 +65,17 @@ export interface PDFOptions {
    * @default '#ffffff'
    */
   backgroundColor?: string;
+
+  /**
+   * Wait time in milliseconds before capturing the element
+   * Useful when the element needs time to render content
+   * @default 0
+   */
+  waitTime?: number;
 }
 
 /**
- * Result of PDF conversion
+ * Result of PDF conversion (raster mode)
  */
 export interface PDFResult {
   /**
@@ -85,4 +92,80 @@ export interface PDFResult {
    * Function to revoke the object URL (call when done)
    */
   cleanup: () => void;
+}
+
+/**
+ * Options for vector PDF generation (printNodesToPDF)
+ *
+ * Note: Most styling (fontSize, margins, padding) is read from the
+ * PrintNode tree itself, matching @react-pdf/renderer behavior.
+ * These options are for overriding or providing defaults.
+ */
+export interface VectorPDFOptions {
+  /**
+   * Paper width in points (overrides Page component's size.width)
+   * @default Read from Page component, or 205pt (≈72mm)
+   */
+  paperWidth?: number;
+
+  /**
+   * Paper height in points (overrides Page component's size.height)
+   * Set to 'auto' for dynamic height based on content (like @react-pdf)
+   * @default 'auto' - height adjusts to fit content
+   */
+  paperHeight?: number | 'auto';
+
+  /**
+   * Default font size in points (used when component doesn't specify fontSize)
+   * @default 10
+   */
+  defaultFontSize?: number;
+
+  /**
+   * Line height multiplier
+   * @default 1.2
+   */
+  lineHeight?: number;
+
+  /**
+   * Font family (must be available in jsPDF)
+   * @default "Helvetica"
+   */
+  fontFamily?: string;
+
+  /**
+   * Pixel to mm conversion factor
+   * @default 0.264583 (1px = 0.264583mm at 96dpi)
+   */
+  pxToMm?: number;
+}
+
+/**
+ * Result of vector PDF generation
+ */
+export interface VectorPDFResult {
+  /**
+   * The generated PDF as a Blob
+   */
+  blob: Blob;
+
+  /**
+   * The generated PDF as an ArrayBuffer (for IPC transfer)
+   */
+  arrayBuffer: ArrayBuffer;
+
+  /**
+   * Object URL for the blob (can be used with window.open)
+   */
+  url: string;
+
+  /**
+   * Function to revoke the object URL (call when done)
+   */
+  cleanup: () => void;
+
+  /**
+   * Save PDF to file (triggers download in browser)
+   */
+  save: (filename: string) => void;
 }

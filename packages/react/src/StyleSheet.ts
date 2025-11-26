@@ -5,8 +5,20 @@
  * Since thermal printers don't need compiled stylesheets, we just return the styles as-is.
  */
 
+import { ViewStyle, TextStyle } from '@thermal-print/core';
+
+/**
+ * Valid style declaration types that can be used in StyleSheet.create
+ * Supports ViewStyle, TextStyle, or a combination of both
+ */
+export type StyleDeclaration = ViewStyle | TextStyle | (ViewStyle & TextStyle);
+
+/**
+ * Strict styles interface that only allows valid style properties
+ * Each key must map to a valid StyleDeclaration
+ */
 export interface Styles {
-  [key: string]: any;
+  [key: string]: StyleDeclaration;
 }
 
 export const StyleSheet = {

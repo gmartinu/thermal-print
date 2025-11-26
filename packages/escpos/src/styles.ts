@@ -77,15 +77,13 @@ export function mapFontSizeToESCPOS(fontSize?: number | string): {
   // Default to 1x1 (normal size)
   if (!fontSize) return { width: 1, height: 1 };
 
-  // Parse fontSize if it's a string (e.g., "8.28px")
+  // Parse fontSize if it's a string  (e.g., "8.28px")
   const size = typeof fontSize === "string" ? parseFloat(fontSize) : fontSize;
 
   if (isNaN(size)) return { width: 1, height: 1 };
 
   // Map font size to character multipliers (max 2x2 for ESC ! compatibility)
-  if (size >= 25) return { width: 2, height: 2 }; // 25+px → 2x2 (maximum)
-  if (size >= 19) return { width: 2, height: 1 }; // 19-24px → 2x1
-  if (size >= 13) return { width: 1, height: 2 }; // 13-18px → 1x2
+  if (size >= 20) return { width: 2, height: 2 }; // 25+px → 2x2 (maximum)
   return { width: 1, height: 1 }; // 8-12px → 1x1 (normal)
 }
 

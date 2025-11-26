@@ -1,15 +1,18 @@
 # @thermal-print/pdf
 
-Framework-agnostic PDF generation from DOM elements. Perfect for converting thermal printer previews to printable PDFs.
+PDF generation for thermal printers with two modes of operation:
+1. **Vector PDF (recommended)**: `printNodesToPDF()` - converts PrintNode IR to vector PDF with real text
+2. **Raster PDF (legacy)**: `convertToPDF()` - captures DOM as image (lower quality)
 
 ## Features
 
-- 🎯 **Framework-agnostic** - Works with React, Vue, vanilla JS, or any framework
-- 📄 **Simple API** - Just pass an element ID or reference
-- 🖨️ **Browser printing** - Generate PDFs ready for `window.print()`
+- 🎯 **Two rendering modes** - Vector (recommended) or raster (legacy)
+- 📄 **Simple API** - Works with PrintNode tree or DOM elements
+- 🖨️ **Real text** - Vector mode produces crisp, searchable text
 - 📥 **Auto-download** - Optional automatic file download
 - 🎨 **Flexible sizing** - Supports standard paper sizes and thermal paper widths
-- 🔧 **Customizable** - Control quality, margins, orientation, and more
+- 🔄 **Dynamic height** - `wrap=true` creates single-page continuous receipts
+- 🎯 **Style inheritance** - Respects `alignItems: "center"` from parent Views
 
 ## Installation
 
@@ -23,7 +26,46 @@ yarn add @thermal-print/pdf
 
 ## Usage
 
-### Basic Example
+### Vector PDF (Recommended)
+
+```typescript
+import { convertToPrintNodes } from '@thermal-print/react';
+import { printNodesToPDF } from '@thermal-print/pdf';
+
+// Convert React component to PrintNode tree
+const printNode = convertToPrintNodes(<MyReceipt />);
+
+// Generate vector PDF (styles are read from the component)
+const result = await printNodesToPDF(printNode);
+
+// Open in new window for printing
+window.open(result.url);
+
+// Or send to printer
+const buffer = result.arrayBuffer;
+ipcRenderer.send('print-pdf', buffer);
+
+// Clean up when done
+result.cleanup();
+```
+
+### With Dynamic Height (Single Page Receipt)
+
+```tsx
+import { Document, Page, View, Text } from '@thermal-print/react';
+
+// Use wrap=true for dynamic height (no page breaks)
+<Document>
+  <Page size={{ width: 205, height: 300 }} wrap={true}>
+    <View style={{ alignItems: 'center' }}>
+      <Text>RECEIPT</Text>  {/* Automatically centered */}
+    </View>
+    {/* Content flows continuously without page breaks */}
+  </Page>
+</Document>
+```
+
+### Raster PDF (Legacy)
 
 ```typescript
 import { convertToPDF } from '@thermal-print/pdf';
@@ -103,9 +145,43 @@ await convertToPDF('thermal-receipt', {
 
 ## API Reference
 
-### `convertToPDF(elementOrId, options?)`
+### `printNodesToPDF(printNode, options?)` (Recommended)
 
-Converts a DOM element to a PDF blob.
+Converts a PrintNode tree to a vector PDF with real text.
+
+#### Parameters
+
+- **`printNode`** (`PrintNode`) - The PrintNode tree from `convertToPrintNodes()`
+- **`options`** (`VectorPDFOptions`) - Optional configuration (usually read from Page component)
+
+#### Returns
+
+`Promise<VectorPDFResult>` - Object containing:
+- `blob`: The generated PDF as a Blob
+- `arrayBuffer`: The PDF as ArrayBuffer (for sending to printers)
+- `url`: Object URL for the blob
+- `cleanup()`: Function to revoke the object URL
+- `save(filename)`: Function to download the PDF
+
+### VectorPDFOptions
+
+```typescript
+interface VectorPDFOptions {
+  paperWidth?: number;      // Width in points (default: from Page.size or 205pt)
+  paperHeight?: number | 'auto'; // Height in points or 'auto' for dynamic
+  defaultFontSize?: number; // Default font size in points (default: 10)
+  lineHeight?: number;      // Line height multiplier (default: 1.2)
+  fontFamily?: string;      // Font family (default: "Helvetica")
+}
+```
+
+**Note**: When `Page` has `wrap={true}`, the PDF uses dynamic height (no page breaks).
+
+---
+
+### `convertToPDF(elementOrId, options?)` (Legacy)
+
+Converts a DOM element to a raster PDF blob.
 
 #### Parameters
 
@@ -245,6 +321,45 @@ import { convertToPDF } from '@thermal-print/pdf';
 // Convert to PDF
 await convertToPDF('receipt');
 ```
+
+## Style Inheritance
+
+The vector PDF renderer supports style inheritance from parent Views:
+
+### Alignment (`alignItems`)
+
+```tsx
+// Parent View's alignItems centers children
+<View style={{ alignItems: 'center' }}>
+  <Text>This text is centered</Text>
+  <Image source={qrCode} />  {/* Image is also centered */}
+</View>
+```
+
+### Width Constraints
+
+```tsx
+// Parent View's width constrains child Image
+<View style={{ width: '30%' }}>
+  <Image source={qrCode} />  {/* Image respects 30% width */}
+</View>
+```
+
+## How It Works
+
+### Vector PDF (`printNodesToPDF`)
+
+1. Traverses the PrintNode tree (from `@thermal-print/react`)
+2. Reads styles from each node (fontSize, textAlign, padding, etc.)
+3. Uses jsPDF's native text APIs for crisp vector output
+4. Supports dynamic height with `wrap={true}` (no page breaks)
+
+### Raster PDF (`convertToPDF`)
+
+1. Captures the DOM element using **html2canvas**
+2. Converts the canvas to a high-quality image
+3. Generates a PDF using **jsPDF**
+4. Returns a Blob ready for printing or download
 
 ## License
 

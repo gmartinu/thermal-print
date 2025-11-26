@@ -212,6 +212,47 @@ src/
 - Version bumps create Git tags automatically
 - See `PUBLISHING.md` for detailed publishing setup instructions
 
+## PDF Package (`packages/pdf`)
+
+The `@thermal-print/pdf` package provides vector PDF generation from PrintNode trees.
+
+### Architecture
+
+**Key files:**
+- `src/index.ts` - Entry point: `printNodesToPDF()` (vector) and `convertToPDF()` (raster)
+- `src/pdf-generator.ts` - Low-level jsPDF wrapper for text, images, and layout
+- `src/pdf-traverser.ts` - Walks PrintNode tree and calls PDFGenerator methods
+
+### Processing Pipeline
+
+1. **Entry** (`printNodesToPDF`) - Reads Page props (size, wrap) to configure paper
+2. **Generator** (`PDFGenerator`) - Manages jsPDF instance, coordinates, fonts
+3. **Traverser** (`PDFTraverser`) - Walks tree, handles View/Text/Image nodes
+
+### Key Design Decisions
+
+1. **Dynamic Height** (`wrap=true`): Uses 5000pt initial height, content flows without page breaks
+   - `DYNAMIC_HEIGHT_INITIAL = 5000` in pdf-generator.ts
+   - jsPDF stores absolute Y coordinates, so page cannot be resized after content is rendered
+
+2. **Style Inheritance**: Parent View's styles affect children
+   - `alignItems: "center"` → children Text/Image are centered
+   - `width: "30%"` → constrains child Image width
+   - Tracked via `alignmentContext` and `widthConstraint` in PDFTraverser
+
+3. **Units**: Uses points (pt) like @react-pdf/renderer
+   - Page.size values are in points directly
+   - No mm-to-pt conversion needed
+
+4. **CSS Box Model**: Views follow margin → border → padding → content order
+   - Implemented in `handleView()` in pdf-traverser.ts
+
+### Common Issues
+
+- **Page breaks with `wrap=true`**: Check that `wrap` prop is being read (index.ts lines 255-272)
+- **Image not centered**: Check `alignmentContext` inheritance in handleImage()
+- **Image too large**: Check `widthConstraint` from parent View's width percentage
+
 ## PDF Processing
 
 ## NEVER use the Read tool to open PDF files directly

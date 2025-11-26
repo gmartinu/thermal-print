@@ -1,27 +1,67 @@
-import React, { ReactNode } from 'react';
-import { ViewStyle } from '@thermal-print/core';
+import React, { ReactNode } from "react";
+import { ViewStyle } from "@thermal-print/core";
 
 /**
  * Page component - Represents a page in the document
  *
  * Note: For thermal printers, this is mostly semantic.
  * Thermal printers print continuously without page breaks.
+ * The size prop is accepted for @react-pdf/renderer compatibility.
  *
  * @example
  * ```typescript
- * <Page style={{ padding: 20 }}>
+ * <Page size="A4" style={{ padding: 20 }}>
  *   <Text>Page content</Text>
+ * </Page>
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // With page breaks for PDF (ignored for ESC/POS)
+ * <Page wrap={false}>
+ *   <Text>This won't break across pages in PDF</Text>
  * </Page>
  * ```
  */
 export interface PageProps {
   children: ReactNode;
   style?: ViewStyle;
+  size?: string | { width: number; height?: number | "auto" };
+
+  /**
+   * Whether content can wrap to next page (HTML/PDF ONLY)
+   *
+   * ⚠️ ESC/POS: Completely ignored. Thermal printers print continuously.
+   * ✅ HTML/PDF: Controls CSS page-break behavior.
+   *
+   * - true (default): Content can flow across multiple pages
+   * - false: Keeps content on single page (uses page-break-inside: avoid)
+   *
+   * @default true
+   * @example wrap={false} // Prevent page breaks in PDF
+   */
+  wrap?: boolean;
 }
 
 // Mark component with displayName for reconciler
-export const Page = ({ children, style }: PageProps) => {
-  return React.createElement('Page', { style }, children);
+export const Page = ({ children, style, size, wrap = true }: PageProps) => {
+  // Use 'div' for DOM rendering, but keep data attribute for reconciler to identify
+  const pageStyle = {
+    ...style,
+    // Apply page-break-inside CSS for PDF when wrap is false
+    ...(wrap === false ? { pageBreakInside: "avoid" as const } : {}),
+  };
+
+  return React.createElement(
+    "div",
+    {
+      "data-thermal-component": "Page",
+      style: pageStyle,
+      "data-size": size,
+      "data-wrap": wrap,
+    },
+    children
+  );
 };
 
-Page.displayName = 'Page';
+Page.displayName = "Page";

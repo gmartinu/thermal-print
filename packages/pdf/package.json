@@ -1,7 +1,7 @@
 {
   "name": "@thermal-print/pdf",
-  "version": "0.1.0",
-  "description": "Framework-agnostic PDF generation from DOM elements for thermal printer output",
+  "version": "0.2.0",
+  "description": "PDF generation for thermal printers - vector and raster modes",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
@@ -11,6 +11,7 @@
   "keywords": [
     "thermal-printer",
     "pdf",
+    "vector-pdf",
     "html2canvas",
     "jspdf",
     "receipt-printer",
@@ -19,6 +20,7 @@
   "author": "Gabriel Martinusso",
   "license": "MIT",
   "dependencies": {
+    "@thermal-print/core": "workspace:*",
     "html2canvas": "^1.4.1",
     "jspdf": "^2.5.2"
   },

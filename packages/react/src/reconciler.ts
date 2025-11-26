@@ -46,12 +46,31 @@ const reconciler = Reconciler<
     // Extract style from props
     const style = props.style || {};
 
-    // Filter out children from props to avoid duplication
-    const { children, ...restProps } = props;
+    // Filter out children and data attributes from props
+    const {
+      children,
+      'data-thermal-component': componentType,
+      'data-size': size,
+      'data-wrap': wrap,
+      'data-height': height,
+      ...restProps
+    } = props;
+
+    // Use data-thermal-component if available (for components rendered as HTML elements)
+    // Otherwise use the type directly (for direct reconciler usage)
+    const actualType = componentType || type;
+
+    // Include size, wrap, height in props if present
+    const finalProps = {
+      ...restProps,
+      ...(size !== undefined ? { size } : {}),
+      ...(wrap !== undefined ? { wrap } : {}),
+      ...(height !== undefined ? { height } : {})
+    };
 
     return {
-      type,
-      props: restProps,
+      type: actualType,
+      props: finalProps,
       children: [],
       style,
     };
@@ -102,10 +121,11 @@ const reconciler = Reconciler<
   },
 
   // Check if text should be handled specially
-  shouldSetTextContent(_type: string, props: Record<string, any>): boolean {
-    return (
-      typeof props.children === 'string' || typeof props.children === 'number'
-    );
+  // IMPORTANT: Always return false to ensure React calls createTextInstance for all text.
+  // If this returns true, React skips createTextInstance and expects the host to handle
+  // text directly, but we don't implement that - we only handle text via TextNode children.
+  shouldSetTextContent(_type: string, _props: Record<string, any>): boolean {
+    return false;
   },
 
   // Get root host context
@@ -201,9 +221,26 @@ const reconciler = Reconciler<
     newProps: Record<string, any>,
     _internalHandle: any
   ): void {
-    // Update instance props
-    const { children, style, ...restProps } = newProps;
-    instance.props = restProps;
+    // Update instance props, filtering out data attributes
+    const {
+      children,
+      style,
+      'data-thermal-component': _componentType,
+      'data-size': size,
+      'data-wrap': wrap,
+      'data-height': height,
+      ...restProps
+    } = newProps;
+
+    // Include size, wrap, height in props if present
+    const finalProps = {
+      ...restProps,
+      ...(size !== undefined ? { size } : {}),
+      ...(wrap !== undefined ? { wrap } : {}),
+      ...(height !== undefined ? { height } : {})
+    };
+
+    instance.props = finalProps;
     instance.style = style || {};
   },
 

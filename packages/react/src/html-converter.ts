@@ -43,6 +43,13 @@ export interface ConvertToHTMLOptions {
    * @default false
    */
   keepInDOM?: boolean;
+
+  /**
+   * Additional wait time in milliseconds after rendering
+   * Useful if content needs extra time to load (fonts, images, etc.)
+   * @default 0
+   */
+  waitTime?: number;
 }
 
 /**
@@ -132,7 +139,8 @@ export async function convertToHTML(
     applyThermalStyles = true,
     format = 'element',
     containerId = `thermal-html-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-    keepInDOM = false
+    keepInDOM = false,
+    waitTime = 0
   } = options;
 
   // Create container
@@ -170,8 +178,21 @@ export async function convertToHTML(
   // Render and wait for completion
   await new Promise<void>((resolve) => {
     root.render(component);
-    // Use setTimeout to ensure render is complete
-    setTimeout(resolve, 0);
+
+    // Wait for React to commit changes
+    setTimeout(() => {
+      // Then wait for browser to paint and calculate layout
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          // Additional wait time if specified
+          if (waitTime > 0) {
+            setTimeout(resolve, waitTime);
+          } else {
+            resolve();
+          }
+        });
+      });
+    }, 0);
   });
 
   // Get content based on format

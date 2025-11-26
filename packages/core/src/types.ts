@@ -86,6 +86,30 @@ export interface TextStyle {
    * @example textAlign: 'center'
    */
   textAlign?: 'left' | 'center' | 'right';
+
+  /**
+   * Left padding (HTML/PDF ONLY)
+   *
+   * ⚠️ ESC/POS: Completely ignored.
+   * ✅ HTML/PDF: Applied as CSS padding-left.
+   *
+   * Use this when generating PDFs to add horizontal spacing.
+   *
+   * @example paddingLeft: 10 // 10px left padding in PDF
+   */
+  paddingLeft?: number;
+
+  /**
+   * Right padding (HTML/PDF ONLY)
+   *
+   * ⚠️ ESC/POS: Completely ignored.
+   * ✅ HTML/PDF: Applied as CSS padding-right.
+   *
+   * Use this when generating PDFs to add horizontal spacing.
+   *
+   * @example paddingRight: 10 // 10px right padding in PDF
+   */
+  paddingRight?: number;
 }
 
 /**
@@ -182,22 +206,26 @@ export interface ViewStyle {
   paddingBottom?: number;
 
   /**
-   * Left padding (NOT SUPPORTED)
+   * Left padding (HTML/PDF ONLY)
    *
-   * ⚠️ WARNING: Extracted but completely ignored.
-   * Thermal printers cannot apply horizontal margins.
+   * ⚠️ ESC/POS: Completely ignored.
+   * ✅ HTML/PDF: Applied as CSS padding-left.
    *
-   * @deprecated Property is extracted but not implemented
+   * Use this when generating PDFs to add horizontal spacing.
+   *
+   * @example paddingLeft: 10 // 10px left padding in PDF
    */
   paddingLeft?: number;
 
   /**
-   * Right padding (NOT SUPPORTED)
+   * Right padding (HTML/PDF ONLY)
    *
-   * ⚠️ WARNING: Extracted but completely ignored.
-   * Thermal printers cannot apply horizontal margins.
+   * ⚠️ ESC/POS: Completely ignored.
+   * ✅ HTML/PDF: Applied as CSS padding-right.
    *
-   * @deprecated Property is extracted but not implemented
+   * Use this when generating PDFs to add horizontal spacing.
+   *
+   * @example paddingRight: 10 // 10px right padding in PDF
    */
   paddingRight?: number;
 
@@ -295,4 +323,21 @@ export interface ViewStyle {
    * @example width: 20 // Fixed 20 characters
    */
   width?: string | number;
+
+  /**
+   * Fixed height (HTML/PDF ONLY)
+   *
+   * ⚠️ ESC/POS: Completely ignored. Thermal printers expand vertically to fit content.
+   * ✅ HTML/PDF: Applied as CSS height or min-height.
+   *
+   * Formats:
+   * - String with unit: '100px', '50mm', '2in'
+   * - Number: Treated as pixels
+   *
+   * Use this when generating PDFs to enforce specific heights.
+   *
+   * @example height: '100px' // 100px height in PDF
+   * @example height: 100 // 100px height in PDF
+   */
+  height?: string | number;
 }

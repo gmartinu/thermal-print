@@ -54,6 +54,9 @@ importers:
       '@thermal-print/core':
         specifier: workspace:*
         version: link:../core
+      jimp:
+        specifier: ^1.6.0
+        version: 1.6.0
     devDependencies:
       typescript:
         specifier: ^5.0.0
@@ -61,6 +64,9 @@ importers:
 
   packages/pdf:
     dependencies:
+      '@thermal-print/core':
+        specifier: workspace:*
+        version: link:../core
       html2canvas:
         specifier: ^1.4.1
         version: 1.4.1

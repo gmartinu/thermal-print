@@ -89,6 +89,7 @@ export type {
 
 // Export StyleSheet and Font utilities
 export { StyleSheet } from "./StyleSheet";
+export type { StyleDeclaration, Styles } from "./StyleSheet";
 export { Font } from "./Font";
 
 // Export adapters for custom component mapping

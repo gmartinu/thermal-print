@@ -1,6 +1,6 @@
 {
   "name": "@thermal-print/escpos",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "ESC/POS command generation and thermal printer control",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,7 +17,8 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@thermal-print/core": "workspace:*"
+    "@thermal-print/core": "workspace:*",
+    "jimp": "^1.6.0"
   },
   "devDependencies": {
     "typescript": "^5.0.0"
