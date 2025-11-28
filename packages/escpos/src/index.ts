@@ -7,14 +7,15 @@
  */
 
 // Main conversion function
-export { printNodesToESCPOS, PrintNodeToESCPOSOptions } from './converter';
+export { printNodesToESCPOS } from './converter';
+export type { PrintNodeToESCPOSOptions } from './converter';
 
 // Core classes (for advanced usage)
 export { ESCPOSGenerator } from './generator';
 export { TreeTraverser } from './traverser';
 
 // Command adapters
-export { CommandAdapter, CharacterSize } from './command-adapters/types';
+export type { CommandAdapter, CharacterSize } from './command-adapters/types';
 export { ESCPOSCommandAdapter } from './command-adapters/escpos-adapter';
 export { ESCBematechCommandAdapter } from './command-adapters/escbematech-adapter';
 
@@ -38,4 +39,4 @@ export {
 export { encodeCP860 } from './encodings/cp860';
 
 // Types
-export * from './types';
+export type * from './types';

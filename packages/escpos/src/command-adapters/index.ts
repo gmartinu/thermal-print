@@ -6,6 +6,6 @@
  * - ESC/Bematech: Bematech-specific protocol
  */
 
-export { CommandAdapter, CharacterSize } from './types';
+export type { CommandAdapter, CharacterSize } from './types';
 export { ESCPOSCommandAdapter } from './escpos-adapter';
 export { ESCBematechCommandAdapter } from './escbematech-adapter';

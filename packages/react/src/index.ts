@@ -98,10 +98,11 @@ export type { RendererAdapter, ComponentMapping } from "./adapters";
 export { ReactPDFAdapter, CustomAdapter } from "./adapters";
 
 // Export types
-export * from "./types";
+export type * from "./types";
 
 // Re-export from @thermal-print/core (PrintNode, styles, etc.)
-export * from "@thermal-print/core";
+export type { PrintNode, ElementNode, TextStyle, ViewStyle } from "@thermal-print/core";
+export { StandardElementType } from "@thermal-print/core";
 
 // Re-export from @thermal-print/escpos (printNodesToESCPOS, options, etc.)
 export { printNodesToESCPOS } from "@thermal-print/escpos";

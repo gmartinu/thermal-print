@@ -34,21 +34,23 @@ export interface PageProps {
    * ⚠️ ESC/POS: Completely ignored. Thermal printers print continuously.
    * ✅ HTML/PDF: Controls CSS page-break behavior.
    *
-   * - true (default): Content can flow across multiple pages
+   * - undefined (default): Uses fixed height from size.height if provided
+   * - true: Content flows continuously (dynamic height, no page breaks)
    * - false: Keeps content on single page (uses page-break-inside: avoid)
    *
-   * @default true
+   * @default undefined
+   * @example wrap={true} // Enable dynamic height for long receipts
    * @example wrap={false} // Prevent page breaks in PDF
    */
   wrap?: boolean;
 }
 
 // Mark component with displayName for reconciler
-export const Page = ({ children, style, size, wrap = true }: PageProps) => {
+export const Page = ({ children, style, size, wrap }: PageProps) => {
   // Use 'div' for DOM rendering, but keep data attribute for reconciler to identify
   const pageStyle = {
     ...style,
-    // Apply page-break-inside CSS for PDF when wrap is false
+    // Apply page-break-inside CSS for PDF when wrap is explicitly false
     ...(wrap === false ? { pageBreakInside: "avoid" as const } : {}),
   };
 

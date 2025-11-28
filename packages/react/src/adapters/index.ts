@@ -7,11 +7,10 @@
  * @module adapters
  */
 
-export {
-  StandardElementType,
-  ComponentMapping,
-  RendererAdapter,
-} from './types';
+// Re-export enum (runtime value)
+export { StandardElementType } from './types';
+// Re-export types (type-only)
+export type { ComponentMapping, RendererAdapter } from './types';
 
 export { BaseAdapter } from './base-adapter';
 export { ReactPDFAdapter } from './react-pdf-adapter';

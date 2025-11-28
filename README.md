@@ -2,6 +2,13 @@
 
 A modular TypeScript library suite for thermal printing with clean, standalone architecture.
 
+## 🎮 Live Demo
+
+Try the interactive playground: **[thermal-print Playground](https://gmartinu.github.io/thermal-print/)**
+
+<!-- TODO: Add GIF demo here -->
+<!-- ![Playground Demo](./docs/demo.gif) -->
+
 ## 🎯 Architecture Overview
 
 ```
@@ -319,6 +326,12 @@ pnpm run build:core
 pnpm run build:escpos
 pnpm run build:react
 pnpm run build:pdf
+
+# Run playground locally
+pnpm run playground
+
+# Build playground for production
+pnpm run playground:build
 
 # Watch mode
 pnpm run dev

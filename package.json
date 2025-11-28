@@ -4,7 +4,7 @@
   "private": true,
   "description": "Thermal printer libraries monorepo",
   "scripts": {
-    "build": "pnpm --filter ./packages/* run build",
+    "build": "pnpm run build:core && pnpm run build:escpos && pnpm run build:react && pnpm run build:pdf",
     "build:core": "pnpm --filter @thermal-print/core run build",
     "build:escpos": "pnpm --filter @thermal-print/escpos run build",
     "build:react": "pnpm --filter @thermal-print/react run build",
@@ -12,14 +12,19 @@
     "clean": "pnpm --filter ./packages/* exec rm -rf dist *.tsbuildinfo",
     "dev": "pnpm --filter ./packages/* run build:watch",
     "test": "echo \"No tests configured yet\" && exit 0",
+    "playground": "pnpm --filter @thermal-print/playground run dev",
+    "playground:build": "pnpm --filter @thermal-print/playground run build",
+    "docs": "pnpm --filter @thermal-print/docs run dev",
+    "docs:build": "pnpm --filter @thermal-print/docs run build",
+    "docs:preview": "pnpm --filter @thermal-print/docs run preview",
     "publish:core": "pnpm --filter @thermal-print/core publish --access public",
     "publish:escpos": "pnpm --filter @thermal-print/escpos publish --access public",
     "publish:react": "pnpm --filter @thermal-print/react publish --access public",
     "publish:pdf": "pnpm --filter @thermal-print/pdf publish --access public",
-    "publish:all": "pnpm --filter ./packages/* publish --access public",
-    "version:patch": "pnpm --filter ./packages/* exec pnpm version patch",
-    "version:minor": "pnpm --filter ./packages/* exec pnpm version minor",
-    "version:major": "pnpm --filter ./packages/* exec pnpm version major"
+    "publish:all": "pnpm --filter '@thermal-print/core' --filter '@thermal-print/escpos' --filter '@thermal-print/react' --filter '@thermal-print/pdf' publish --access public",
+    "version:patch": "pnpm --filter '@thermal-print/core' --filter '@thermal-print/escpos' --filter '@thermal-print/react' --filter '@thermal-print/pdf' exec npm version patch --no-git-tag-version",
+    "version:minor": "pnpm --filter '@thermal-print/core' --filter '@thermal-print/escpos' --filter '@thermal-print/react' --filter '@thermal-print/pdf' exec npm version minor --no-git-tag-version",
+    "version:major": "pnpm --filter '@thermal-print/core' --filter '@thermal-print/escpos' --filter '@thermal-print/react' --filter '@thermal-print/pdf' exec npm version major --no-git-tag-version"
   },
   "keywords": [
     "thermal-printer",
@@ -41,6 +46,7 @@
     "@types/jimp": "^0.2.1",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.4",
+    "@types/react-dom": "^19.0.0",
     "@types/react-reconciler": "^0.28.0",
     "serialport": "^13.0.0",
     "ts-node": "^10.9.2",
@@ -50,6 +56,7 @@
   "dependencies": {
     "jimp": "^1.6.0",
     "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "react-reconciler": "^0.29.2"
   },
   "engines": {

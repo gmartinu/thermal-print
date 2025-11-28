@@ -23,14 +23,16 @@ export type ElementNode = PrintNode;
  * Standard element types that can be converted to printer commands.
  * All adapters must normalize their component types to these standard types.
  */
-export enum StandardElementType {
-  DOCUMENT = 'document',
-  PAGE = 'page',
-  VIEW = 'view',
-  TEXT = 'text',
-  IMAGE = 'image',
-  TEXTNODE = 'textnode',
-}
+export const StandardElementType = {
+  DOCUMENT: 'document',
+  PAGE: 'page',
+  VIEW: 'view',
+  TEXT: 'text',
+  IMAGE: 'image',
+  TEXTNODE: 'textnode',
+} as const;
+
+export type StandardElementType = typeof StandardElementType[keyof typeof StandardElementType];
 
 /**
  * Text styling properties that map to printer commands

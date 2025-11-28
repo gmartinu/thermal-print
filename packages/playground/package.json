@@ -1,0 +1,32 @@
+{
+  "name": "@thermal-print/playground",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Interactive playground for thermal-print libraries",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@thermal-print/core": "workspace:*",
+    "@thermal-print/escpos": "workspace:*",
+    "@thermal-print/pdf": "workspace:*",
+    "@thermal-print/react": "workspace:*",
+    "prettier": "^3.7.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@babel/standalone": "^7.26.10",
+    "@monaco-editor/react": "^4.7.0",
+    "@types/babel__standalone": "^7.1.9",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.4.1",
+    "buffer": "^6.0.3",
+    "typescript": "^5.9.3",
+    "vite": "^6.3.0"
+  }
+}

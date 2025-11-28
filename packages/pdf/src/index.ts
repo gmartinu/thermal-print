@@ -263,14 +263,16 @@ export async function printNodesToPDF(
   // No conversion needed - Page.size is already in points
   const paperWidth = pageSize?.width ?? options.paperWidth ?? 205; // Default 205pt ≈ 72mm
 
-  // Paper height: Use 'auto' if wrap=true, else Page's height, else options
-  // wrap=true means content flows continuously without page breaks (dynamic height)
+  // Paper height priority:
+  // 1. Explicit size.height from Page component (if provided)
+  // 2. If wrap=true and no explicit height → dynamic height
+  // 3. options.paperHeight from function call
+  // 4. Default to 'auto'
   const paperHeight: number | 'auto' =
-    pageWrap === true
-      ? 'auto'  // wrap=true means dynamic height (no page breaks)
-      : (typeof pageSize?.height === 'number' ? pageSize.height : null)
-        ?? options.paperHeight
-        ?? 'auto';
+    (typeof pageSize?.height === 'number' ? pageSize.height : null)
+      ?? (pageWrap === true ? 'auto' : null)
+      ?? options.paperHeight
+      ?? 'auto';
 
   console.log(`[printNodesToPDF] Calculated dimensions (points):`, { paperWidth, paperHeight });
 
@@ -322,7 +324,7 @@ function findPageNode(node: PrintNode): PrintNode | null {
 }
 
 // Export types
-export * from "./types";
+export type * from "./types";
 
 // Export generator and traverser for advanced usage
 export { PDFGenerator, PDFTraverser };
