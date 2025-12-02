@@ -116,6 +116,13 @@ export interface VectorPDFOptions {
   paperHeight?: number | 'auto';
 
   /**
+   * Page orientation (overrides Page/Document component's orientation)
+   * If not specified, auto-detected from dimensions (width > height = landscape)
+   * @default Read from Page/Document component, or auto-detect
+   */
+  orientation?: Orientation;
+
+  /**
    * Default font size in points (used when component doesn't specify fontSize)
    * @default 10
    */

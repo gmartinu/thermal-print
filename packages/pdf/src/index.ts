@@ -8,9 +8,9 @@
  * 2. Raster PDF (legacy): convertToPDF() - captures DOM as image (lower quality)
  */
 
+import { PrintNode } from "@thermal-print/core";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
-import { PrintNode } from "@thermal-print/core";
 import { PDFGenerator, PDFGeneratorOptions } from "./pdf-generator";
 import { PDFTraverser } from "./pdf-traverser";
 import { PDFOptions, PDFResult, VectorPDFOptions, VectorPDFResult } from "./types";
@@ -247,21 +247,30 @@ export async function printNodesToPDF(
   printNode: PrintNode,
   options: VectorPDFOptions = {}
 ): Promise<VectorPDFResult> {
-  // Read paper size from Page component if available
+  // Read paper size and orientation from Document/Page components
+  const documentNode = findDocumentNode(printNode);
   const pageNode = findPageNode(printNode);
   const pageSize = pageNode?.props?.size;
 
   // Check for wrap prop - wrap=true means dynamic height (no page breaks)
   const pageWrap = pageNode?.props?.wrap;
 
+  // Read orientation: options > Page > Document > auto-detect
+  const orientation: "portrait" | "landscape" | undefined =
+    options.orientation ??
+    pageNode?.props?.orientation ??
+    documentNode?.props?.orientation ??
+    undefined;
+
   // Debug: log what we found
   console.log(`[printNodesToPDF] pageNode:`, pageNode?.type, pageNode?.props);
   console.log(`[printNodesToPDF] pageSize:`, pageSize);
   console.log(`[printNodesToPDF] pageWrap:`, pageWrap);
+  console.log(`[printNodesToPDF] orientation:`, orientation ?? 'auto-detect');
 
   // Paper dimensions in POINTS (matching react-pdf which uses points directly)
   // No conversion needed - Page.size is already in points
-  const paperWidth = pageSize?.width ?? options.paperWidth ?? 205; // Default 205pt ≈ 72mm
+  const paperWidth = pageSize?.width ?? options.paperWidth ?? 226; // Default 226pt ≈ 80mm
 
   // Paper height priority:
   // 1. Explicit size.height from Page component (if provided)
@@ -276,13 +285,51 @@ export async function printNodesToPDF(
 
   console.log(`[printNodesToPDF] Calculated dimensions (points):`, { paperWidth, paperHeight });
 
-  const generator = new PDFGenerator({
-    paperWidth,
-    paperHeight,
+  // Common options for generator
+  const generatorOptions = {
     defaultFontSize: options.defaultFontSize ?? 10,
     lineHeight: options.lineHeight ?? 1.2,
     fontFamily: options.fontFamily ?? "Helvetica",
     pxToMm: options.pxToMm ?? 0.264583,
+    orientation,
+  };
+
+  // Determine actual paper height
+  let actualPaperHeight: number;
+
+  if (paperHeight === 'auto') {
+    // Two-pass rendering for dynamic height:
+    // 1. First pass: measure content height without rendering
+    console.log(`[printNodesToPDF] Dynamic height: starting measurement pass`);
+
+    const measureGenerator = PDFGenerator.createForMeasurement({
+      paperWidth,
+      paperHeight: 'auto',
+      ...generatorOptions,
+    });
+
+    const measureTraverser = new PDFTraverser(measureGenerator);
+    await measureTraverser.traverse(printNode);
+
+    actualPaperHeight = measureGenerator.getContentHeight();
+    console.log(`[printNodesToPDF] Measurement complete: content height = ${actualPaperHeight}pt`);
+  } else {
+    actualPaperHeight = paperHeight;
+  }
+
+  // 2. Second pass (or only pass if fixed height): render with correct dimensions
+  console.log(`[printNodesToPDF] Creating PDF with dimensions: ${paperWidth}pt x ${actualPaperHeight}pt`);
+
+  // Disable page breaks when:
+  // - wrap=true is set on Page component (thermal receipt-style continuous output)
+  // - OR when using dynamic height (calculated from measurement pass)
+  const shouldDisablePageBreaks = pageWrap === true || paperHeight === 'auto';
+
+  const generator = new (PDFGenerator as any)({
+    paperWidth,
+    paperHeight: actualPaperHeight,
+    ...generatorOptions,
+    _noPageBreaks: shouldDisablePageBreaks,
   });
 
   const traverser = new PDFTraverser(generator);
@@ -290,7 +337,7 @@ export async function printNodesToPDF(
   // Traverse the PrintNode tree and generate PDF
   await traverser.traverse(printNode);
 
-  // Finalize page height to fit content (for dynamic height mode)
+  // Finalize (no-op with two-pass rendering, kept for backwards compatibility)
   generator.finalizePageHeight();
 
   // Get outputs
@@ -305,6 +352,22 @@ export async function printNodesToPDF(
     cleanup: () => URL.revokeObjectURL(url),
     save: (filename: string) => generator.save(filename),
   };
+}
+
+/**
+ * Find the Document node in the PrintNode tree
+ */
+function findDocumentNode(node: PrintNode): PrintNode | null {
+  if (node.type.toLowerCase() === "document") {
+    return node;
+  }
+
+  for (const child of node.children || []) {
+    const found = findDocumentNode(child);
+    if (found) return found;
+  }
+
+  return null;
 }
 
 /**
@@ -329,3 +392,4 @@ export type * from "./types";
 // Export generator and traverser for advanced usage
 export { PDFGenerator, PDFTraverser };
 export type { PDFGeneratorOptions };
+

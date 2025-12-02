@@ -19,10 +19,17 @@ export interface PDFGeneratorOptions {
 
   /**
    * Paper height in points (read from Page component's size prop)
-   * Set to 'auto' for dynamic height based on content (like @react-pdf)
+   * When 'auto', printNodesToPDF uses two-pass rendering to calculate exact height.
    * @default 'auto'
    */
   paperHeight?: number | "auto";
+
+  /**
+   * Page orientation (read from Page/Document component)
+   * If not specified, auto-detected from dimensions (width > height = landscape)
+   * @default auto-detect from dimensions
+   */
+  orientation?: "portrait" | "landscape";
 
   /**
    * Default font size in points (components override this via style.fontSize)
@@ -50,6 +57,23 @@ export interface PDFGeneratorOptions {
   pxToMm?: number;
 }
 
+/**
+ * Internal options for measurement pass (not exposed publicly)
+ */
+interface PDFGeneratorInternalOptions extends PDFGeneratorOptions {
+  /**
+   * Measurement mode - tracks positions without rendering to jsPDF
+   * Used internally for two-pass rendering with dynamic height
+   */
+  _measurementMode?: boolean;
+
+  /**
+   * Disable page breaks entirely (for thermal receipt-style output)
+   * Used when rendering with a pre-calculated height from measurement pass
+   */
+  _noPageBreaks?: boolean;
+}
+
 type TextAlign = "left" | "center" | "right";
 
 // Large initial height for dynamic sizing (will be trimmed after content is rendered)
@@ -57,15 +81,18 @@ type TextAlign = "left" | "center" | "right";
 const DYNAMIC_HEIGHT_INITIAL = 5000;
 
 export class PDFGenerator {
-  private pdf: jsPDF;
-  private options: Required<Omit<PDFGeneratorOptions, "paperHeight">> & {
+  private pdf!: jsPDF;
+  private options: Required<Omit<PDFGeneratorOptions, "paperHeight" | "orientation">> & {
     paperHeight: number | "auto";
+    orientation?: "portrait" | "landscape";
   };
   private currentY: number;
   private currentX: number; // Current X position (for margins)
   private contentWidth: number;
   private isDynamicHeight: boolean;
   private actualPaperHeight: number;
+  private measurementMode: boolean;
+  private noPageBreaks: boolean;
 
   // Current text state
   private currentAlign: TextAlign = "left";
@@ -76,7 +103,13 @@ export class PDFGenerator {
   private marginLeft: number = 0;
   private marginRight: number = 0;
 
-  constructor(options: PDFGeneratorOptions = {}) {
+  constructor(options: PDFGeneratorInternalOptions = {}) {
+    // Measurement mode: only track positions, don't render to jsPDF
+    this.measurementMode = options._measurementMode ?? false;
+
+    // Disable page breaks (used for thermal receipt-style continuous output)
+    this.noPageBreaks = options._noPageBreaks ?? false;
+
     // Check if height should be dynamic (default to 'auto' like @react-pdf)
     this.isDynamicHeight =
       options.paperHeight === "auto" || options.paperHeight === undefined;
@@ -97,6 +130,7 @@ export class PDFGenerator {
       lineHeight: options.lineHeight ?? 1.2,
       fontFamily: options.fontFamily ?? "Helvetica",
       pxToMm: options.pxToMm ?? 0.264583,
+      orientation: options.orientation,
     };
 
     this.currentFontSize = this.options.defaultFontSize;
@@ -104,24 +138,64 @@ export class PDFGenerator {
     this.currentX = 0;
     this.currentY = 0;
 
-    console.log(
-      `[PDFGenerator] Creating jsPDF with format: [${this.options.paperWidth}, ${this.actualPaperHeight}] (points)`
-    );
+    if (this.measurementMode) {
+      console.log(
+        `[PDFGenerator] Measurement mode: calculating content height only`
+      );
+    } else {
+      console.log(
+        `[PDFGenerator] Creating jsPDF with format: [${this.options.paperWidth}, ${this.actualPaperHeight}] (points)`
+      );
+    }
 
-    // Use POINTS as unit (like react-pdf) instead of mm
+    // Determine orientation: use explicit option, or auto-detect from dimensions
+    const isLandscape =
+      options.orientation === "landscape" ||
+      (options.orientation === undefined &&
+        this.options.paperWidth > this.actualPaperHeight);
+
+    // Always create jsPDF - needed for font metrics even in measurement mode
+    // Note: format is always [width, height] - jsPDF handles rotation via orientation param
     this.pdf = new jsPDF({
-      orientation: "portrait",
+      orientation: isLandscape ? "landscape" : "portrait",
       unit: "pt", // POINTS - matches react-pdf
       format: [this.options.paperWidth, this.actualPaperHeight],
     });
 
-    // Verify jsPDF was created correctly
-    console.log(`[PDFGenerator] jsPDF created. Internal page size:`, {
-      width: this.pdf.internal.pageSize.getWidth(),
-      height: this.pdf.internal.pageSize.getHeight(),
-    });
+    if (!this.measurementMode) {
+      console.log(`[PDFGenerator] jsPDF created. Internal page size:`, {
+        width: this.pdf.internal.pageSize.getWidth(),
+        height: this.pdf.internal.pageSize.getHeight(),
+      });
+    }
 
     this.applyFont();
+  }
+
+  /**
+   * Create a measurement-only generator for calculating content height
+   * Used internally for two-pass rendering with dynamic height
+   */
+  static createForMeasurement(options: PDFGeneratorOptions = {}): PDFGenerator {
+    return new PDFGenerator({
+      ...options,
+      _measurementMode: true,
+    });
+  }
+
+  /**
+   * Check if this generator is in measurement mode
+   */
+  isMeasurementMode(): boolean {
+    return this.measurementMode;
+  }
+
+  /**
+   * Get the calculated content height (for measurement pass)
+   * @param bottomMargin - Bottom margin in points (default: 5pt)
+   */
+  getContentHeight(bottomMargin: number = 5): number {
+    return this.currentY + bottomMargin;
   }
 
   /**
@@ -203,6 +277,7 @@ export class PDFGenerator {
 
   /**
    * Apply current font settings to PDF
+   * Always applied (even in measurement mode) for accurate font metrics
    */
   private applyFont(): void {
     const fontStyle = this.isBold ? "bold" : "normal";
@@ -354,20 +429,23 @@ export class PDFGenerator {
         const roundedX = Math.round(x * 100) / 100;
         const roundedY = Math.round(this.currentY * 100) / 100;
 
-        // Log each text placement for debugging
-        console.log(
-          `[PDFGenerator] text("${line.substring(0, 20)}${
-            line.length > 20 ? "..." : ""
-          }", x=${roundedX}, y=${roundedY}, fontSize=${this.currentFontSize}pt)`
-        );
+        // Skip actual rendering in measurement mode (only track positions)
+        if (!this.measurementMode) {
+          // Log each text placement for debugging
+          console.log(
+            `[PDFGenerator] text("${line.substring(0, 20)}${
+              line.length > 20 ? "..." : ""
+            }", x=${roundedX}, y=${roundedY}, fontSize=${this.currentFontSize}pt)`
+          );
 
-        // Use 'top' baseline so Y represents the top of text, not the baseline
-        // This matches how @react-pdf positions text
-        // Use jsPDF's native alignment for more precise positioning
-        this.pdf.text(line, roundedX, roundedY, {
-          align: this.currentAlign,
-          baseline: "top",
-        });
+          // Use 'top' baseline so Y represents the top of text, not the baseline
+          // This matches how @react-pdf positions text
+          // Use jsPDF's native alignment for more precise positioning
+          this.pdf.text(line, roundedX, roundedY, {
+            align: this.currentAlign,
+            baseline: "top",
+          });
+        }
       }
       if (lines.length > 1) {
         this.addNewline();
@@ -381,6 +459,9 @@ export class PDFGenerator {
    */
   addTextAtPosition(text: string, position: "left" | "center" | "right"): void {
     if (!text) return;
+
+    // Skip actual rendering in measurement mode
+    if (this.measurementMode) return;
 
     let x: number;
     let alignOption: "left" | "center" | "right" = "left";
@@ -423,6 +504,9 @@ export class PDFGenerator {
    */
   addTextAtX(text: string, xOffset: number): void {
     if (!text) return;
+
+    // Skip actual rendering in measurement mode
+    if (this.measurementMode) return;
 
     const x = this.marginLeft + xOffset;
     const roundedX = Math.round(x * 100) / 100;
@@ -499,6 +583,9 @@ export class PDFGenerator {
    * Does NOT advance Y - spacing should come from View margins
    */
   addDivider(style: "solid" | "dashed" = "solid"): void {
+    // Skip actual rendering in measurement mode
+    if (this.measurementMode) return;
+
     const startX = this.marginLeft;
     const endX = this.options.paperWidth - this.marginRight;
     const y = this.currentY;
@@ -514,9 +601,6 @@ export class PDFGenerator {
 
     this.pdf.line(startX, y, endX, y);
     this.pdf.setLineDashPattern([], 0); // Reset to solid
-    // No Y advancement - View margins handle spacing
-    // this.currentY += 10;
-    // this.checkPageBreak();
   }
 
   /**
@@ -532,10 +616,12 @@ export class PDFGenerator {
       const imgWidth = width ?? this.contentWidth * 0.5;
       const imgHeight = height ?? imgWidth; // Square by default
 
-      const x = this.getImageXPosition(imgWidth);
-
-      // Add the image
-      this.pdf.addImage(source, "PNG", x, this.currentY, imgWidth, imgHeight);
+      // Skip actual rendering in measurement mode, but still track Y position
+      if (!this.measurementMode) {
+        const x = this.getImageXPosition(imgWidth);
+        // Add the image
+        this.pdf.addImage(source, "PNG", x, this.currentY, imgWidth, imgHeight);
+      }
 
       // Advance Y position (no extra newline - View margins handle spacing)
       this.currentY += imgHeight;
@@ -579,6 +665,12 @@ export class PDFGenerator {
     // For dynamic height, no page breaks - content flows continuously
     if (this.isDynamicHeight) return;
 
+    // Skip page breaks in measurement mode
+    if (this.measurementMode) return;
+
+    // Skip page breaks when disabled (thermal receipt-style output)
+    if (this.noPageBreaks) return;
+
     const maxY = this.actualPaperHeight - 10; // 10mm bottom margin
 
     if (this.currentY > maxY) {
@@ -588,41 +680,17 @@ export class PDFGenerator {
   }
 
   /**
-   * Finalize the page height to match actual content (for dynamic height mode)
-   * Call this after all content has been rendered.
+   * Finalize the page height (legacy method, kept for backwards compatibility)
    *
-   * NOTE: jsPDF stores absolute Y coordinates. Resizing the page after content
-   * is rendered causes content to be positioned outside the visible area.
-   * Instead of resizing, we calculate the proper height upfront.
+   * Note: With two-pass rendering, the height is set correctly at PDF creation time,
+   * so this method is now a no-op. It's kept for backwards compatibility.
    *
-   * @param bottomMargin - Bottom margin in points (default: 5pt)
+   * @param _bottomMargin - Unused (kept for backwards compatibility)
    */
-  finalizePageHeight(bottomMargin: number = 5): void {
+  finalizePageHeight(_bottomMargin: number = 5): void {
+    // No-op: Two-pass rendering sets the correct height at creation time
     console.log(
-      `[PDFGenerator] finalizePageHeight called. currentY=${this.currentY}pt, isDynamicHeight=${this.isDynamicHeight}`
-    );
-
-    if (!this.isDynamicHeight) return;
-
-    // Calculate what the final height should be
-    const contentHeight = this.currentY + bottomMargin;
-
-    console.log(
-      `[PDFGenerator] Content height: ${contentHeight}pt (currentY: ${this.currentY}pt + margin: ${bottomMargin}pt)`
-    );
-
-    // IMPORTANT: Do NOT resize the page after content is rendered!
-    // jsPDF stores absolute coordinates, so resizing would put content
-    // outside the visible area. The large initial height (5000pt) means
-    // there will be blank space at the bottom, but content will be visible.
-    //
-    // TODO: Implement proper two-pass rendering:
-    // 1. First pass: calculate total content height
-    // 2. Create PDF with exact height
-    // 3. Second pass: render content
-
-    console.log(
-      `[PDFGenerator] Final page size: ${this.options.paperWidth}pt x ${this.actualPaperHeight}pt (content uses ${contentHeight}pt)`
+      `[PDFGenerator] finalizePageHeight called. Page height: ${this.actualPaperHeight}pt`
     );
   }
 
