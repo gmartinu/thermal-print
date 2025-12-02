@@ -1,6 +1,6 @@
 {
   "name": "@thermal-print/pdf",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "description": "PDF generation for thermal printers - vector and raster modes",
   "main": "dist/index.js",
