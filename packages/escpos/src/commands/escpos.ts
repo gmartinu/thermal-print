@@ -49,12 +49,14 @@ export const UNDERLINE_OFF = [ESC, 0x2d, 0x00];
  * @param width - Width multiplier (1 or 2)
  * @param height - Height multiplier (1 or 2)
  * @param bold - Whether text should be bold (optional, default: false)
+ * @param font - Font selection: 0 = Font A (12x24), 1 = Font B (9x17) (optional, default: 0)
  * @returns ESC/POS ESC ! n command bytes
  */
 export const calculateCharacterSize = (
   width: number,
   height: number,
-  bold: boolean = false
+  bold: boolean = false,
+  font: 0 | 1 = 0
 ): number[] => {
   // ESC ! command format:
   // Bit 0: Character font (0=Font A, 1=Font B)
@@ -63,10 +65,7 @@ export const calculateCharacterSize = (
   // Bit 5: Double-width
   // Bit 7: Underline
 
-  // Use Font B as base (9×17 dots)
-  // Note: Font D (16×24 dots) is selected separately via ESC U command
-  // and will override this font selection
-  let n = 0x01; // Font B
+  let n = font & 0x01; // Bit 0: font selection
 
   // Set double-height bit (bit 4 = 0x10)
   if (height >= 2) {

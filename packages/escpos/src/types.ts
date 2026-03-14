@@ -10,8 +10,10 @@ export interface ESCPOSCommand {
 
 export interface ConversionContext {
   paperWidth: number;
+  basePaperWidth: number;
   currentAlign: 'left' | 'center' | 'right';
   currentSize: { width: number; height: number };
+  currentFont: 0 | 1;
   currentBold: boolean;
   encoding: string;
   debug: boolean;

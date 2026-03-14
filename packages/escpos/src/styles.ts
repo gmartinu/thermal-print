@@ -51,40 +51,41 @@ export function isBold(style: TextStyle): boolean {
 }
 
 /**
- * Maps fontSize to ESC/POS character size (width x height multipliers)
+ * ESC/POS font size mapping result
+ */
+export interface ESCPOSFontSize {
+  font: 0 | 1;      // 0 = Font A (12x24, 48 cols), 1 = Font B (9x17, 64 cols)
+  width: number;     // Width multiplier (1-2)
+  height: number;    // Height multiplier (1-2)
+}
+
+/**
+ * Maps fontSize to ESC/POS font selection + character size multipliers
  *
- * Font size mapping using ESC ! command (limited to 2x2 maximum):
- * - 8-12px  → 1x1 (normal)
- * - 13-18px → 1x2 (normal width, double height)
- * - 19-24px → 2x1 (double width, normal height)
- * - 25+px   → 2x2 (double width, double height)
+ * Three visual levels using standard ESC/POS fonts:
+ * - Condensada: Font B 1x1 (9x17, 64 cols) — fontSize <= 10
+ * - Normal:     Font A 1x1 (12x24, 48 cols) — fontSize 11-19
+ * - Expandida:  Font A 2x2 (12x24, 24 cols) — fontSize >= 20
  *
  * Note: ESC ! command only supports up to 2x2 character size.
- * Larger sizes (3x, 4x, etc.) would require GS ! command which may not
- * be supported on all thermal printers (e.g., Bematech MP-4200 TH).
- *
- * PDF uses zoom factor (default 0.46), so actual sizes are smaller:
- * - 16 * 0.46 = 7.36 (normal text)
- * - 18 * 0.46 = 8.28 (medium text)
- * - 20 * 0.46 = 9.2 (title text)
- *
- * We use raw fontSize values (ignoring zoom) for better differentiation
  */
-export function mapFontSizeToESCPOS(fontSize?: number | string): {
-  width: number;
-  height: number;
-} {
-  // Default to 1x1 (normal size)
-  if (!fontSize) return { width: 1, height: 1 };
+export function mapFontSizeToESCPOS(fontSize?: number | string): ESCPOSFontSize {
+  // Default: Font A normal (48 cols)
+  if (!fontSize) return { font: 0, width: 1, height: 1 };
 
-  // Parse fontSize if it's a string  (e.g., "8.28px")
+  // Parse fontSize if it's a string (e.g., "8.28px")
   const size = typeof fontSize === "string" ? parseFloat(fontSize) : fontSize;
 
-  if (isNaN(size)) return { width: 1, height: 1 };
+  if (isNaN(size)) return { font: 0, width: 1, height: 1 };
 
-  // Map font size to character multipliers (max 2x2 for ESC ! compatibility)
-  if (size >= 20) return { width: 2, height: 2 }; // 25+px → 2x2 (maximum)
-  return { width: 1, height: 1 }; // 8-12px → 1x1 (normal)
+  // Condensada: Font B (64 cols) — fontSize <= 10
+  if (size <= 10) return { font: 1, width: 1, height: 1 };
+
+  // Normal: Font A (48 cols) — fontSize 11-19
+  if (size <= 19) return { font: 0, width: 1, height: 1 };
+
+  // Expandida: Font A 2x2 (24 cols) — fontSize >= 20
+  return { font: 0, width: 2, height: 2 };
 }
 
 /**

@@ -69,8 +69,10 @@ export class ESCPOSGenerator {
 
     this.context = {
       paperWidth,
+      basePaperWidth: paperWidth,
       currentAlign: "left",
       currentSize: { width: 1, height: 1 },
+      currentFont: 0,
       currentBold: false,
       encoding,
       debug,
@@ -90,8 +92,7 @@ export class ESCPOSGenerator {
     // Common values: 10 (tight), 20 (moderate), 30 (default), 40 (spacious)
     this.setLineSpacing(5);
 
-    // Apply initial print mode to set Font B explicitly
-    // This ensures the narrower font (9×17) is used from the start
+    // Apply initial print mode with Font A (48 cols) as default
     this.applyPrintMode();
   }
 
@@ -127,30 +128,52 @@ export class ESCPOSGenerator {
   }
 
   /**
-   * Set text size using width and height multipliers
-   * Uses ESC ! command which combines size and emphasis
-   * @param size - Character size as {width, height} multipliers (max 2x2 for ESC !)
+   * Set text size using width/height multipliers and font selection
+   * Uses ESC ! command which combines size, font, and emphasis
+   * @param size - Character size with font: {font, width, height}
    */
-  setSize(size: { width: number; height: number }): void {
-    // Only update if size actually changed
+  setSize(size: { width: number; height: number; font?: 0 | 1 }): void {
+    const font = size.font ?? 0;
+    // Only update if size or font actually changed
     if (
       this.context.currentSize.width !== size.width ||
-      this.context.currentSize.height !== size.height
+      this.context.currentSize.height !== size.height ||
+      this.context.currentFont !== font
     ) {
       this.context.currentSize = size;
+      this.context.currentFont = font;
+      this.updatePaperWidth();
       this.applyPrintMode();
     }
   }
 
   /**
-   * Apply current print mode (size + bold) using command adapter
-   * This combines character size and emphasis into a single command
+   * Update effective paper width based on current font and size
+   * Font A 1x1 → 48 cols, Font A 2x → 24 cols, Font B 1x1 → 64 cols
+   */
+  private updatePaperWidth(): void {
+    if (this.context.currentFont === 1) {
+      // Font B: 64 cols
+      this.context.paperWidth = 64;
+    } else if (this.context.currentSize.width >= 2) {
+      // Font A double-width: 24 cols
+      this.context.paperWidth = Math.floor(this.context.basePaperWidth / 2);
+    } else {
+      // Font A normal: 48 cols (basePaperWidth)
+      this.context.paperWidth = this.context.basePaperWidth;
+    }
+  }
+
+  /**
+   * Apply current print mode (font + size + bold) using command adapter
+   * This combines font selection, character size, and emphasis into a single command
    */
   private applyPrintMode(): void {
     const command = this.commandAdapter.getCharacterSizeCommand(
       this.context.currentSize.width,
       this.context.currentSize.height,
-      this.context.currentBold
+      this.context.currentBold,
+      this.context.currentFont
     );
     this.buffer.pushArray(command);
   }
@@ -162,7 +185,7 @@ export class ESCPOSGenerator {
   resetFormatting(): void {
     this.setAlign("left");
     this.setBold(false);
-    this.setSize({ width: 1, height: 1 });
+    this.setSize({ width: 1, height: 1, font: 0 });
   }
 
   /**
@@ -327,7 +350,7 @@ export class ESCPOSGenerator {
     const bold = isBold(textStyle);
     this.setBold(bold);
 
-    // Set size
+    // Set size (includes font selection based on fontSize)
     const size = mapFontSizeToESCPOS(textStyle.fontSize);
     this.setSize(size);
   }

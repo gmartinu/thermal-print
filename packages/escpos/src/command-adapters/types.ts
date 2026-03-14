@@ -44,8 +44,9 @@ export interface CommandAdapter {
    * @param width - Width multiplier
    * @param height - Height multiplier
    * @param bold - Whether text should be bold
+   * @param font - Font selection: 0 = Font A, 1 = Font B (optional)
    */
-  getCharacterSizeCommand(width: number, height: number, bold: boolean): number[];
+  getCharacterSizeCommand(width: number, height: number, bold: boolean, font?: number): number[];
 
   /**
    * Set line spacing command

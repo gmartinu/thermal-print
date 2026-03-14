@@ -63,14 +63,15 @@ export class ESCPOSCommandAdapter implements CommandAdapter {
   getCharacterSizeCommand(
     width: number,
     height: number,
-    bold: boolean
+    bold: boolean,
+    font: number = 0
   ): number[] {
     /**
      * ESC ! n - Select print mode
      * Uses the calculateCharacterSize function from escpos.ts
-     * This provides character sizing up to 2x2 with optional bold
+     * This provides character sizing up to 2x2 with optional bold and font selection
      */
-    return ESCPOS.calculateCharacterSize(width, height, bold);
+    return ESCPOS.calculateCharacterSize(width, height, bold, font as 0 | 1);
   }
 
   getLineSpacingCommand(dots?: number): number[] {

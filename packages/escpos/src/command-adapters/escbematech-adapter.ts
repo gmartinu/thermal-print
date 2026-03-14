@@ -45,7 +45,7 @@ export class ESCBematechCommandAdapter implements CommandAdapter {
     }
   }
 
-  getCharacterSizeCommand(width: number, height: number, bold: boolean): number[] {
+  getCharacterSizeCommand(width: number, height: number, bold: boolean, font: number = 0): number[] {
     /**
      * ESC/Bema character sizing:
      * - Uses ESC ! n for combined mode (emphasis, double-height, double-width)

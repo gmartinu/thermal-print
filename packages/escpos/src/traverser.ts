@@ -1,6 +1,6 @@
 import { ElementNode } from "@thermal-print/core";
 import { ESCPOSGenerator } from "./generator";
-import { alignTextInColumn, extractTextStyle, extractViewStyle, mapTextAlign, mergeStyles, parseWidth } from "./styles";
+import { alignTextInColumn, extractTextStyle, extractViewStyle, mapFontSizeToESCPOS, mapTextAlign, mergeStyles, parseWidth } from "./styles";
 
 /**
  * Tree Traverser
@@ -118,7 +118,6 @@ export class TreeTraverser {
     }
 
     const viewStyle = extractViewStyle(node.style);
-    const paperWidth = this.generator.getPaperWidth();
 
     // Check layout justification mode
     const isSpaceBetween = viewStyle.justifyContent === "space-between";
@@ -135,23 +134,39 @@ export class TreeTraverser {
       rowTextStyle = mergeStyles(firstTextNode.style);
     }
 
+    // Calculate effective paper width based on the row's font/size
+    let paperWidth = this.generator.getPaperWidth();
+    if (rowTextStyle) {
+      const rowFontSize = mapFontSizeToESCPOS(rowTextStyle.fontSize);
+      if (rowFontSize.font === 1) {
+        paperWidth = 64; // Font B: 64 cols
+      } else if (rowFontSize.width >= 2) {
+        paperWidth = Math.floor(this.generator.getPaperWidth() / 2); // Font A 2x: 24 cols
+      } else {
+        paperWidth = 48; // Font A normal: 48 cols
+      }
+    }
+
+    // First pass: calculate explicit widths and track remaining space
+    let usedWidth = 0;
+    let columnsWithoutWidth = 0;
+    const childData: { childStyle: any; hasWidth: boolean; explicitWidth: number; content: string; align: "left" | "center" | "right"; node: ElementNode }[] = [];
+
     for (const child of children) {
       const childStyle = extractViewStyle(child.style);
-      const width = parseWidth(childStyle.width, paperWidth);
+      const hasWidth = childStyle.width !== undefined;
+      const explicitWidth = hasWidth ? parseWidth(childStyle.width, paperWidth) : 0;
+      if (hasWidth) usedWidth += explicitWidth;
+      else columnsWithoutWidth++;
 
-      // Collect text content from child
       const content = await this.collectTextContent(child);
 
-      // Determine alignment - check for Text node textAlign first
       let align: "left" | "center" | "right" = "left";
-
-      // Look for Text element with textAlign
       const textNode = this.findFirstTextNode(child);
       if (textNode && textNode.style) {
         const textStyle = extractTextStyle(textNode.style);
         align = mapTextAlign(textStyle.textAlign);
       } else {
-        // Fall back to View alignment
         if (childStyle.alignItems === "center" || childStyle.justifyContent === "center") {
           align = "center";
         } else if (childStyle.alignItems === "flex-end" || childStyle.justifyContent === "flex-end") {
@@ -159,7 +174,16 @@ export class TreeTraverser {
         }
       }
 
-      columns.push({ node: child, width, content, align });
+      childData.push({ childStyle, hasWidth, explicitWidth, content, align, node: child });
+    }
+
+    // Second pass: distribute remaining width to columns without explicit widths
+    const remainingWidth = Math.max(0, paperWidth - usedWidth);
+    const autoWidth = columnsWithoutWidth > 0 ? Math.floor(remainingWidth / columnsWithoutWidth) : paperWidth;
+
+    for (const data of childData) {
+      const width = data.hasWidth ? data.explicitWidth : autoWidth;
+      columns.push({ node: data.node, width, content: data.content, align: data.align });
     }
 
     // Build row text
@@ -171,9 +195,10 @@ export class TreeTraverser {
       return childStyle.width !== undefined;
     });
 
-    if (isSpaceBetween && columns.length === 2 && !hasExplicitWidths) {
-      // Special handling for space-between layout (payment summary style) WITHOUT explicit widths
-      // Calculate space between
+    if (columns.length === 2 && !hasExplicitWidths) {
+      // 2-column layout without explicit widths: treat as space-between
+      // This covers both explicit space-between and flexGrow patterns
+      // (common receipt pattern: label on left, value on right)
       const usedSpace = columns[0].content.length + columns[1].content.length;
       const gap = Math.max(1, paperWidth - usedSpace);
 
@@ -286,11 +311,12 @@ export class TreeTraverser {
     // Traverse children (nested Text elements)
     await this.traverseChildren(node);
 
-    // Reset formatting after text (especially bold)
-    this.generator.resetFormatting();
-
-    // Add newline after text element
+    // Add newline BEFORE resetting formatting so alignment takes effect at LF
+    // (ESC/POS applies alignment at print time, i.e. when LF is sent)
     this.generator.addNewline();
+
+    // Reset formatting after the line is printed
+    this.generator.resetFormatting();
   }
 
   /**
