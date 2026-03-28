@@ -86,6 +86,63 @@ export const calculateCharacterSize = (
   return [ESC, 0x21, n];
 };
 
+// ============================================================================
+// FONT SELECTION (by name)
+// ============================================================================
+
+/**
+ * ESC M n - Select character font
+ * n: 0 = Font A (12×24), 1 = Font B (9×17 condensed)
+ */
+export const FONT_A = [ESC, 0x4D, 0x00];
+export const FONT_B = [ESC, 0x4D, 0x01];
+
+/**
+ * Select font by name ('A' or 'B')
+ * Convenience wrapper around ESC M command.
+ * @param font - 'A' or 'B'
+ */
+export const selectFontByName = (font: 'A' | 'B'): number[] => {
+  return font === 'B' ? FONT_B : FONT_A;
+};
+
+// ============================================================================
+// CHARACTER SIZE (GS ! - supports up to 8x8)
+// ============================================================================
+
+/**
+ * GS ! n - Select character size
+ *
+ * Byte format: bits 0-3 = height multiplier (0-7), bits 4-7 = width multiplier (0-7)
+ * Multiplier value = actual multiplier - 1 (0=1x, 1=2x, 2=3x, ..., 7=8x)
+ *
+ * Examples:
+ *   0x00 = 1x1 (normal)
+ *   0x10 = 2x1 (double width, normal height)
+ *   0x01 = 1x2 (normal width, double height)
+ *   0x11 = 2x2
+ *   0x22 = 3x3
+ *   0x33 = 4x4
+ *
+ * @param widthMultiplier - Width multiplier (1-8)
+ * @param heightMultiplier - Height multiplier (1-8)
+ */
+export const setCharacterSize = (widthMultiplier: number, heightMultiplier: number): number[] => {
+  const w = Math.max(0, Math.min(7, widthMultiplier - 1));
+  const h = Math.max(0, Math.min(7, heightMultiplier - 1));
+  const n = (w << 4) | h;
+  return [GS, 0x21, n];
+};
+
+/**
+ * ESC E n - Turn emphasis (bold) on/off
+ * Separate from character size (unlike ESC ! which combines them)
+ * @param on - true to enable bold, false to disable
+ */
+export const setEmphasis = (on: boolean): number[] => {
+  return [ESC, 0x45, on ? 0x01 : 0x00];
+};
+
 // Line spacing
 // ESC 3 n - Set line spacing to n dots
 // Note: Using minimum of 18 dots for consistency with ESC/Bematech protocol

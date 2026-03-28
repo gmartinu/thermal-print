@@ -41,15 +41,20 @@ export type StandardElementType = typeof StandardElementType[keyof typeof Standa
  */
 export interface TextStyle {
   /**
-   * Font size in pixels (maps to 4 discrete ESC/POS sizes)
+   * Font size in pixels (maps to 6 discrete ESC/POS sizes)
    *
-   * Size mapping (ESC ! command):
-   * - 8-12px → 1x1 (normal)
-   * - 13-18px → 1x2 (normal width, double height)
-   * - 19-24px → 2x1 (double width, normal height)
-   * - 25+px → 2x2 (double width, double height - MAX)
+   * Size mapping (ESC M + GS ! commands):
+   * - ≤8px   → Font B, 1x1 (condensed, ~64 cols)
+   * - 9-16px → Font A, 1x1 (normal, 48 cols)
+   * - 17-24px → Font A, 2x1 (double width, 24 cols)
+   * - 25-32px → Font A, 2x2 (double width+height, 24 cols)
+   * - 33-48px → Font A, 3x3 (16 cols)
+   * - 49+px  → Font A, 4x4 (12 cols)
    *
-   * @example fontSize: 16 // → 1x2 size
+   * @example fontSize: 8 // → Font B condensed
+   * @example fontSize: 12 // → Font A normal
+   * @example fontSize: 20 // → Font A 2x width
+   * @example fontSize: 30 // → Font A 2x2
    */
   fontSize?: number;
 

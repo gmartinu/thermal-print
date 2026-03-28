@@ -5,11 +5,12 @@ import {
   generateDividerLine,
   isBold,
   isDashedBorder,
-  mapFontSizeToESCPOS,
+  mapFontSize,
   mapTextAlign,
 } from "./styles";
 import { ConversionContext } from "./types";
 import { CommandAdapter, ESCPOSCommandAdapter } from "./command-adapters";
+import { FontSizeMapping } from "./command-adapters/types";
 
 /**
  * Simple buffer implementation for accumulating ESC/POS commands
@@ -55,6 +56,9 @@ export class ESCPOSGenerator {
   private buffer: ESCPOSBuffer;
   private context: ConversionContext;
   private commandAdapter: CommandAdapter;
+  private basePaperWidth: number; // Original paper width (e.g. 48 for Font A)
+  private currentFont: 'A' | 'B' = 'A';
+  private currentFontSizeMapping: FontSizeMapping = { font: 'A', widthMultiplier: 1, heightMultiplier: 1, effectiveCols: 48 };
 
   constructor(
     paperWidth = 48,
@@ -66,6 +70,8 @@ export class ESCPOSGenerator {
 
     // Use provided adapter or default to ESC/POS
     this.commandAdapter = commandAdapter || new ESCPOSCommandAdapter();
+
+    this.basePaperWidth = paperWidth;
 
     this.context = {
       paperWidth,
@@ -83,16 +89,23 @@ export class ESCPOSGenerator {
 
   /**
    * Initialize printer
-   * Sets up the printer with default settings and comfortable line spacing
+   * Sets up the printer with default settings and comfortable line spacing.
+   * Starts with Font A at 1x1 (normal 48-col mode).
    */
   initialize(): void {
     // Initialize with comfortable line spacing (30 dots ≈ default 1/6 inch)
     // Common values: 10 (tight), 20 (moderate), 30 (default), 40 (spacious)
     this.setLineSpacing(5);
 
-    // Apply initial print mode to set Font B explicitly
-    // This ensures the narrower font (9×17) is used from the start
-    this.applyPrintMode();
+    // Start with Font A, 1x1 size, no bold
+    // The font/size will be dynamically changed per text element via applyTextStyle
+    const defaultMapping: FontSizeMapping = {
+      font: 'A',
+      widthMultiplier: 1,
+      heightMultiplier: 1,
+      effectiveCols: this.basePaperWidth,
+    };
+    this.setFontSize(defaultMapping);
   }
 
   /**
@@ -128,8 +141,7 @@ export class ESCPOSGenerator {
 
   /**
    * Set text size using width and height multipliers
-   * Uses ESC ! command which combines size and emphasis
-   * @param size - Character size as {width, height} multipliers (max 2x2 for ESC !)
+   * @param size - Character size as {width, height} multipliers
    */
   setSize(size: { width: number; height: number }): void {
     // Only update if size actually changed
@@ -138,6 +150,39 @@ export class ESCPOSGenerator {
       this.context.currentSize.height !== size.height
     ) {
       this.context.currentSize = size;
+      this.applyPrintMode();
+    }
+  }
+
+  /**
+   * Set font and size from a FontSizeMapping (used by applyTextStyle).
+   * This updates font selection (ESC M), character size (GS !),
+   * and adjusts the effective paper width for column calculations.
+   */
+  setFontSize(mapping: FontSizeMapping): void {
+    const fontChanged = this.currentFont !== mapping.font;
+    const sizeChanged =
+      this.context.currentSize.width !== mapping.widthMultiplier ||
+      this.context.currentSize.height !== mapping.heightMultiplier;
+
+    if (fontChanged || sizeChanged) {
+      this.currentFont = mapping.font;
+      this.currentFontSizeMapping = mapping;
+      this.context.currentSize = {
+        width: mapping.widthMultiplier,
+        height: mapping.heightMultiplier,
+      };
+
+      // Update effective paper width based on the font size mapping
+      this.context.paperWidth = mapping.effectiveCols;
+
+      // Apply font selection if adapter supports it
+      if ('getFontCommand' in this.commandAdapter) {
+        const fontCmd = (this.commandAdapter as any).getFontCommand(mapping.font);
+        this.buffer.pushArray(fontCmd);
+      }
+
+      // Apply size and bold
       this.applyPrintMode();
     }
   }
@@ -157,12 +202,21 @@ export class ESCPOSGenerator {
 
   /**
    * Reset text formatting to defaults
-   * Note: Alignment is NOT reset here because it should persist for the entire line
+   * Resets font to A, size to 1x1, bold off, alignment left,
+   * and restores base paper width.
    */
   resetFormatting(): void {
     this.setAlign("left");
     this.setBold(false);
-    this.setSize({ width: 1, height: 1 });
+
+    // Reset font and size together to avoid partial state
+    const defaultMapping: FontSizeMapping = {
+      font: 'A',
+      widthMultiplier: 1,
+      heightMultiplier: 1,
+      effectiveCols: this.basePaperWidth,
+    };
+    this.setFontSize(defaultMapping);
   }
 
   /**
@@ -193,13 +247,30 @@ export class ESCPOSGenerator {
   }
 
   /**
-   * Add divider line
+   * Add divider line.
+   * Always uses base paper width and resets to Font A 1x1 for consistent full-width dividers.
    */
   addDivider(dashed = false): void {
+    // Save current state
+    const savedSize = { ...this.context.currentSize };
+    const savedFont = this.currentFont;
+    const savedMapping = { ...this.currentFontSizeMapping };
+
+    // Reset to base font for full-width divider
+    this.setFontSize({
+      font: 'A',
+      widthMultiplier: 1,
+      heightMultiplier: 1,
+      effectiveCols: this.basePaperWidth,
+    });
+
     this.setAlign("left");
-    const line = generateDividerLine(this.context.paperWidth, dashed);
+    const line = generateDividerLine(this.basePaperWidth, dashed);
     this.addText(line);
     this.addNewline();
+
+    // Restore previous state
+    this.setFontSize(savedMapping);
   }
 
   /**
@@ -327,9 +398,9 @@ export class ESCPOSGenerator {
     const bold = isBold(textStyle);
     this.setBold(bold);
 
-    // Set size
-    const size = mapFontSizeToESCPOS(textStyle.fontSize);
-    this.setSize(size);
+    // Set font + size using the 6-level mapping
+    const fontSizeMapping = mapFontSize(textStyle.fontSize);
+    this.setFontSize(fontSizeMapping);
   }
 
   /**

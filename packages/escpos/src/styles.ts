@@ -1,5 +1,6 @@
 import { encodeCP860 } from "./encodings/cp860";
 import { TextStyle, ViewStyle } from "@thermal-print/core";
+import { FontSizeMapping } from "./command-adapters/types";
 
 /**
  * Extracts text style from a style object
@@ -51,40 +52,77 @@ export function isBold(style: TextStyle): boolean {
 }
 
 /**
- * Maps fontSize to ESC/POS character size (width x height multipliers)
+ * Maps fontSize to ESC/POS font selection and character size multipliers.
  *
- * Font size mapping using ESC ! command (limited to 2x2 maximum):
- * - 8-12px  → 1x1 (normal)
- * - 13-18px → 1x2 (normal width, double height)
- * - 19-24px → 2x1 (double width, normal height)
- * - 25+px   → 2x2 (double width, double height)
+ * 6-level font size mapping using ESC M (font select) + GS ! (size multiplier):
  *
- * Note: ESC ! command only supports up to 2x2 character size.
- * Larger sizes (3x, 4x, etc.) would require GS ! command which may not
- * be supported on all thermal printers (e.g., Bematech MP-4200 TH).
+ * | fontSize   | Font | GS ! byte | Multiplier | Effective cols (80mm) |
+ * |------------|------|-----------|------------|-----------------------|
+ * | ≤ 8        | B    | 0x00     | 1x1        | 64                    |
+ * | 9-16       | A    | 0x00     | 1x1        | 48                    |
+ * | 17-24      | A    | 0x10     | 2x1 (w2h1)| 24                    |
+ * | 25-32      | A    | 0x11     | 2x2        | 24                    |
+ * | 33-48      | A    | 0x22     | 3x3        | 16                    |
+ * | 49+        | A    | 0x33     | 4x4        | 12                    |
  *
- * PDF uses zoom factor (default 0.46), so actual sizes are smaller:
- * - 16 * 0.46 = 7.36 (normal text)
- * - 18 * 0.46 = 8.28 (medium text)
- * - 20 * 0.46 = 9.2 (title text)
+ * Note: Uses GS ! (1D 21 n) for size multipliers (supports up to 8x8).
+ * Font selection uses ESC M (1B 4D n): 0=Font A, 1=Font B.
+ * Bold uses ESC E (1B 45 n): separate from size command.
  *
- * We use raw fontSize values (ignoring zoom) for better differentiation
+ * @deprecated Use mapFontSize instead for full FontSizeMapping result.
+ *             This function is kept for backward compatibility.
  */
 export function mapFontSizeToESCPOS(fontSize?: number | string): {
   width: number;
   height: number;
 } {
-  // Default to 1x1 (normal size)
-  if (!fontSize) return { width: 1, height: 1 };
+  const mapping = mapFontSize(fontSize);
+  return { width: mapping.widthMultiplier, height: mapping.heightMultiplier };
+}
 
-  // Parse fontSize if it's a string  (e.g., "8.28px")
+/**
+ * Maps fontSize to a full FontSizeMapping with font selection and multipliers.
+ *
+ * 6-level font size mapping:
+ * - fontSize ≤ 8   → Font B (condensed, 64 cols) via ESC M 1
+ * - fontSize 9-16  → Font A (normal, 48 cols) via ESC M 0
+ * - fontSize 17-24 → Font A + GS ! 0x10 (width 2x, 24 cols)
+ * - fontSize 25-32 → Font A + GS ! 0x11 (2x2, 24 cols)
+ * - fontSize 33-48 → Font A + GS ! 0x22 (3x3, 16 cols)
+ * - fontSize 49+   → Font A + GS ! 0x33 (4x4, 12 cols)
+ */
+export function mapFontSize(fontSize?: number | string): FontSizeMapping {
+  // Default: Font A, 1x1 (normal)
+  if (!fontSize) return { font: 'A', widthMultiplier: 1, heightMultiplier: 1, effectiveCols: 48 };
+
+  // Parse fontSize if it's a string (e.g., "8.28px")
   const size = typeof fontSize === "string" ? parseFloat(fontSize) : fontSize;
 
-  if (isNaN(size)) return { width: 1, height: 1 };
+  if (isNaN(size)) return { font: 'A', widthMultiplier: 1, heightMultiplier: 1, effectiveCols: 48 };
 
-  // Map font size to character multipliers (max 2x2 for ESC ! compatibility)
-  if (size >= 20) return { width: 2, height: 2 }; // 25+px → 2x2 (maximum)
-  return { width: 1, height: 1 }; // 8-12px → 1x1 (normal)
+  // 6-level mapping
+  if (size <= 8) {
+    // Font B condensed (9x17 dots) → ~64 cols on 80mm paper
+    return { font: 'B', widthMultiplier: 1, heightMultiplier: 1, effectiveCols: 64 };
+  }
+  if (size <= 16) {
+    // Font A normal (12x24 dots) → 48 cols
+    return { font: 'A', widthMultiplier: 1, heightMultiplier: 1, effectiveCols: 48 };
+  }
+  if (size <= 24) {
+    // Font A + 2x width → 24 cols
+    return { font: 'A', widthMultiplier: 2, heightMultiplier: 1, effectiveCols: 24 };
+  }
+  if (size <= 32) {
+    // Font A + 2x2 → 24 cols
+    return { font: 'A', widthMultiplier: 2, heightMultiplier: 2, effectiveCols: 24 };
+  }
+  if (size <= 48) {
+    // Font A + 3x3 → 16 cols
+    return { font: 'A', widthMultiplier: 3, heightMultiplier: 3, effectiveCols: 16 };
+  }
+  // 49+ → Font A + 4x4 → 12 cols
+  return { font: 'A', widthMultiplier: 4, heightMultiplier: 4, effectiveCols: 12 };
 }
 
 /**

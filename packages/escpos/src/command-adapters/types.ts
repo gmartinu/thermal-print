@@ -14,6 +14,17 @@ export interface CharacterSize {
 }
 
 /**
+ * Font size result from mapping CSS fontSize to ESC/POS parameters.
+ * Includes font selection (A/B), width/height multipliers, and effective columns.
+ */
+export interface FontSizeMapping {
+  font: 'A' | 'B';       // Font A (12x24) or Font B (9x17, condensed)
+  widthMultiplier: number; // Width multiplier (1-4 via GS !)
+  heightMultiplier: number; // Height multiplier (1-4 via GS !)
+  effectiveCols: number;   // Effective columns at this size (for paper width calculation)
+}
+
+/**
  * Command adapter interface for generating printer-specific commands
  */
 export interface CommandAdapter {

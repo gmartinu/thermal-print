@@ -15,7 +15,7 @@ export { ESCPOSGenerator } from './generator';
 export { TreeTraverser } from './traverser';
 
 // Command adapters
-export type { CommandAdapter, CharacterSize } from './command-adapters/types';
+export type { CommandAdapter, CharacterSize, FontSizeMapping } from './command-adapters/types';
 export { ESCPOSCommandAdapter } from './command-adapters/escpos-adapter';
 export { ESCBematechCommandAdapter } from './command-adapters/escbematech-adapter';
 
@@ -25,6 +25,7 @@ export {
   extractViewStyle,
   isBold,
   mapFontSizeToESCPOS,
+  mapFontSize,
   mapTextAlign,
   calculateSpacing,
   isDashedBorder,
