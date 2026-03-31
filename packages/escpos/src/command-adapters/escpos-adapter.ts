@@ -32,18 +32,11 @@ export class ESCPOSCommandAdapter implements CommandAdapter {
     const commands: number[] = [];
 
     // ESC @ - Reset printer to default state
+    // This resets all settings to factory defaults including print area width
+    // and motion units. We intentionally do NOT send GS P or GS W here —
+    // the printer's factory defaults handle paper width correctly for
+    // centering and line wrapping.
     commands.push(...ESCPOS.INIT);
-
-    // GS P x y - Set horizontal and vertical motion units
-    // Set both to 203 DPI (standard thermal printer resolution)
-    // This ensures GS W and other commands use 1/203 inch per unit
-    commands.push(0x1D, 0x50, 203, 203);
-
-    // GS W nL nH - Set printing area width
-    // For 80mm paper at 203 DPI: 80mm ≈ 3.15" × 203 = 640 dots
-    // Using 640 dots to match physical paper width
-    const width = 640;
-    commands.push(0x1D, 0x57, width & 0xFF, (width >> 8) & 0xFF);
 
     return commands;
   }
@@ -64,14 +57,14 @@ export class ESCPOSCommandAdapter implements CommandAdapter {
     width: number,
     height: number,
     bold: boolean,
-    font: number = 0
+    useFontB: boolean = true
   ): number[] {
     /**
      * ESC ! n - Select print mode
      * Uses the calculateCharacterSize function from escpos.ts
-     * This provides character sizing up to 2x2 with optional bold and font selection
+     * This provides character sizing up to 2x2 with optional bold
      */
-    return ESCPOS.calculateCharacterSize(width, height, bold, font as 0 | 1);
+    return ESCPOS.calculateCharacterSize(width, height, bold, useFontB);
   }
 
   getLineSpacingCommand(dots?: number): number[] {

@@ -49,14 +49,13 @@ export const UNDERLINE_OFF = [ESC, 0x2d, 0x00];
  * @param width - Width multiplier (1 or 2)
  * @param height - Height multiplier (1 or 2)
  * @param bold - Whether text should be bold (optional, default: false)
- * @param font - Font selection: 0 = Font A (12x24), 1 = Font B (9x17) (optional, default: 0)
  * @returns ESC/POS ESC ! n command bytes
  */
 export const calculateCharacterSize = (
   width: number,
   height: number,
   bold: boolean = false,
-  font: 0 | 1 = 0
+  useFontB: boolean = true
 ): number[] => {
   // ESC ! command format:
   // Bit 0: Character font (0=Font A, 1=Font B)
@@ -65,7 +64,8 @@ export const calculateCharacterSize = (
   // Bit 5: Double-width
   // Bit 7: Underline
 
-  let n = font & 0x01; // Bit 0: font selection
+  // Font selection: Font A (12×24, 48 cols) or Font B (9×17, 64 cols)
+  let n = useFontB ? 0x01 : 0x00;
 
   // Set double-height bit (bit 4 = 0x10)
   if (height >= 2) {
@@ -87,9 +87,9 @@ export const calculateCharacterSize = (
 
 // Line spacing
 // ESC 3 n - Set line spacing to n dots
-// Note: Using minimum of 18 dots for consistency with ESC/Bematech protocol
+// n=0 means no extra spacing (just character height)
 export const setLineSpacing = (dots: number): number[] => {
-  const value = Math.max(18, Math.min(255, dots));
+  const value = Math.max(0, Math.min(255, dots));
   return [ESC, 0x33, value];
 };
 

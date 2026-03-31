@@ -8,7 +8,7 @@
 
 // Main conversion function
 export { printNodesToESCPOS } from './converter';
-export type { PrintNodeToESCPOSOptions } from './converter';
+export type { PrintNodeToESCPOSOptions, FontMode } from './converter';
 
 // Core classes (for advanced usage)
 export { ESCPOSGenerator } from './generator';

@@ -1,6 +1,6 @@
 import { ElementNode } from "@thermal-print/core";
 import { ESCPOSGenerator } from "./generator";
-import { alignTextInColumn, extractTextStyle, extractViewStyle, mapFontSizeToESCPOS, mapTextAlign, mergeStyles, parseWidth } from "./styles";
+import { alignTextInColumn, extractTextStyle, extractViewStyle, mapTextAlign, mergeStyles, parseWidth, wrapText } from "./styles";
 
 /**
  * Tree Traverser
@@ -118,6 +118,7 @@ export class TreeTraverser {
     }
 
     const viewStyle = extractViewStyle(node.style);
+    const paperWidth = this.generator.getPaperWidth();
 
     // Check layout justification mode
     const isSpaceBetween = viewStyle.justifyContent === "space-between";
@@ -134,39 +135,23 @@ export class TreeTraverser {
       rowTextStyle = mergeStyles(firstTextNode.style);
     }
 
-    // Calculate effective paper width based on the row's font/size
-    let paperWidth = this.generator.getPaperWidth();
-    if (rowTextStyle) {
-      const rowFontSize = mapFontSizeToESCPOS(rowTextStyle.fontSize);
-      if (rowFontSize.font === 1) {
-        paperWidth = 64; // Font B: 64 cols
-      } else if (rowFontSize.width >= 2) {
-        paperWidth = Math.floor(this.generator.getPaperWidth() / 2); // Font A 2x: 24 cols
-      } else {
-        paperWidth = 48; // Font A normal: 48 cols
-      }
-    }
-
-    // First pass: calculate explicit widths and track remaining space
-    let usedWidth = 0;
-    let columnsWithoutWidth = 0;
-    const childData: { childStyle: any; hasWidth: boolean; explicitWidth: number; content: string; align: "left" | "center" | "right"; node: ElementNode }[] = [];
-
     for (const child of children) {
       const childStyle = extractViewStyle(child.style);
-      const hasWidth = childStyle.width !== undefined;
-      const explicitWidth = hasWidth ? parseWidth(childStyle.width, paperWidth) : 0;
-      if (hasWidth) usedWidth += explicitWidth;
-      else columnsWithoutWidth++;
+      const width = parseWidth(childStyle.width, paperWidth);
 
+      // Collect text content from child
       const content = await this.collectTextContent(child);
 
+      // Determine alignment - check for Text node textAlign first
       let align: "left" | "center" | "right" = "left";
+
+      // Look for Text element with textAlign
       const textNode = this.findFirstTextNode(child);
       if (textNode && textNode.style) {
         const textStyle = extractTextStyle(textNode.style);
         align = mapTextAlign(textStyle.textAlign);
       } else {
+        // Fall back to View alignment
         if (childStyle.alignItems === "center" || childStyle.justifyContent === "center") {
           align = "center";
         } else if (childStyle.alignItems === "flex-end" || childStyle.justifyContent === "flex-end") {
@@ -174,20 +159,8 @@ export class TreeTraverser {
         }
       }
 
-      childData.push({ childStyle, hasWidth, explicitWidth, content, align, node: child });
+      columns.push({ node: child, width, content, align });
     }
-
-    // Second pass: distribute remaining width to columns without explicit widths
-    const remainingWidth = Math.max(0, paperWidth - usedWidth);
-    const autoWidth = columnsWithoutWidth > 0 ? Math.floor(remainingWidth / columnsWithoutWidth) : paperWidth;
-
-    for (const data of childData) {
-      const width = data.hasWidth ? data.explicitWidth : autoWidth;
-      columns.push({ node: data.node, width, content: data.content, align: data.align });
-    }
-
-    // Build row text
-    let rowText = "";
 
     // Check if columns have explicit widths (table layout) or should use space-between
     const hasExplicitWidths = columns.some((col) => {
@@ -195,48 +168,45 @@ export class TreeTraverser {
       return childStyle.width !== undefined;
     });
 
-    if (columns.length === 2 && !hasExplicitWidths) {
-      // 2-column layout without explicit widths: treat as space-between
-      // This covers both explicit space-between and flexGrow patterns
-      // (common receipt pattern: label on left, value on right)
-      const usedSpace = columns[0].content.length + columns[1].content.length;
-      const gap = Math.max(1, paperWidth - usedSpace);
-
-      rowText = columns[0].content + " ".repeat(gap) + columns[1].content;
-    } else if (isCentered && !hasExplicitWidths) {
-      // Center the entire row on the paper by calculating total content width
-      // and adding leading spaces
-      // Add spacing between columns (1 space per gap)
-      const spacingBetweenColumns = Math.max(0, columns.length - 1);
-      const totalContentWidth = columns.reduce((sum, col) => sum + col.content.length, 0) + spacingBetweenColumns;
-
-      // Calculate leading spaces to center the entire row
-      const leadingSpaces = Math.max(0, Math.floor((paperWidth - totalContentWidth) / 2));
-
-      // Build row with leading spaces (center entire row)
-      rowText = " ".repeat(leadingSpaces);
-      for (let i = 0; i < columns.length; i++) {
-        if (i > 0) {
-          rowText += " "; // Add space between columns
-        }
-        rowText += columns[i].content;
-      }
-    } else {
-      // Normal column layout OR space-between with explicit widths (use column padding)
-      for (let i = 0; i < columns.length; i++) {
-        const col = columns[i];
-        const cellText = alignTextInColumn(col.content, col.width, col.align);
-        rowText += cellText;
-      }
-    }
+    // Determine max number of sub-lines across all columns
+    const columnLines = columns.map(col => col.content.split("\n"));
+    const maxLines = Math.max(...columnLines.map(lines => lines.length));
 
     // Apply text style (bold, fontSize) before adding the row text
     if (rowTextStyle) {
       this.generator.applyTextStyle(rowTextStyle);
     }
 
-    this.generator.addText(rowText);
-    this.generator.addNewline();
+    // Emit one output line per sub-line
+    for (let lineIdx = 0; lineIdx < maxLines; lineIdx++) {
+      let rowText = "";
+
+      if (isSpaceBetween && columns.length === 2 && !hasExplicitWidths) {
+        const left = (columnLines[0][lineIdx] || "");
+        const right = (columnLines[1][lineIdx] || "");
+        const usedSpace = left.length + right.length;
+        const gap = Math.max(1, paperWidth - usedSpace);
+        rowText = left + " ".repeat(gap) + right;
+      } else if (isCentered && !hasExplicitWidths) {
+        const parts: string[] = [];
+        for (let i = 0; i < columns.length; i++) {
+          parts.push(columnLines[i][lineIdx] || "");
+        }
+        const spacingBetweenColumns = Math.max(0, columns.length - 1);
+        const totalContentWidth = parts.reduce((sum, p) => sum + p.length, 0) + spacingBetweenColumns;
+        const leadingSpaces = Math.max(0, Math.floor((paperWidth - totalContentWidth) / 2));
+        rowText = " ".repeat(leadingSpaces) + parts.join(" ");
+      } else {
+        for (let i = 0; i < columns.length; i++) {
+          const cellContent = columnLines[i][lineIdx] || "";
+          const cellText = alignTextInColumn(cellContent, columns[i].width, columns[i].align);
+          rowText += cellText;
+        }
+      }
+
+      this.generator.addText(rowText);
+      this.generator.addNewline();
+    }
 
     // Reset formatting after the row
     if (rowTextStyle) {
@@ -262,29 +232,53 @@ export class TreeTraverser {
   }
 
   /**
-   * Collect text content from a node and its children
+   * Collect text content from a node and its children.
+   * Returns lines separated by \n when nested column Views contain multiple Text elements.
    */
   private async collectTextContent(node: ElementNode): Promise<string> {
-    let text = "";
-
     const normalizedType = node.type.toLowerCase();
-    if (normalizedType === "text" || normalizedType === "textnode") {
-      // Get text from props.children
+
+    if (normalizedType === "textnode") {
+      if (node.props.children !== undefined) {
+        return String(node.props.children);
+      }
+      return "";
+    }
+
+    if (normalizedType === "text") {
+      // Collect all nested text into one string (inline)
+      let text = "";
       if (node.props.children !== undefined) {
         text += String(node.props.children);
       }
+      for (const child of node.children) {
+        text += await this.collectTextContent(child);
+      }
+      return text;
     }
 
-    // Recursively collect from children
+    // For View nodes: check if it's a column layout with multiple children
+    // If so, join children with \n (each child = separate line)
+    const viewStyle = extractViewStyle(node.style);
+    const isColumn = viewStyle.flexDirection !== "row";
+    const parts: string[] = [];
+
     for (const child of node.children) {
-      text += await this.collectTextContent(child);
+      const childText = await this.collectTextContent(child);
+      if (childText) {
+        parts.push(childText);
+      }
     }
 
-    return text;
+    if (isColumn && parts.length > 1) {
+      return parts.join("\n");
+    }
+    return parts.join("");
   }
 
   /**
    * Handle Text element
+   * Collects ALL text (props + nested children) then applies word wrap
    */
   private async handleText(node: ElementNode): Promise<void> {
     // Merge styles from parent if needed
@@ -293,30 +287,26 @@ export class TreeTraverser {
     // Apply text styling (sets alignment, bold, size)
     this.generator.applyTextStyle(style);
 
-    // Get text content
-    let textContent = "";
+    // Collect ALL text content from this node and all nested children
+    const fullText = await this.collectTextContent(node);
 
-    // Check props.children first
-    if (node.props.children !== undefined) {
-      if (typeof node.props.children === "string" || typeof node.props.children === "number") {
-        textContent = String(node.props.children);
+    // Word wrap the full text to fit paper width
+    if (fullText) {
+      const paperWidth = this.generator.getPaperWidth();
+      const lines = wrapText(fullText, paperWidth);
+      for (let i = 0; i < lines.length; i++) {
+        this.generator.addText(lines[i]);
+        if (i < lines.length - 1) {
+          this.generator.addNewline();
+        }
       }
     }
 
-    // If we have direct text, print it
-    if (textContent) {
-      this.generator.addText(textContent);
-    }
-
-    // Traverse children (nested Text elements)
-    await this.traverseChildren(node);
-
-    // Add newline BEFORE resetting formatting so alignment takes effect at LF
-    // (ESC/POS applies alignment at print time, i.e. when LF is sent)
-    this.generator.addNewline();
-
-    // Reset formatting after the line is printed
+    // Reset formatting after text (especially bold)
     this.generator.resetFormatting();
+
+    // Add newline after text element
+    this.generator.addNewline();
   }
 
   /**

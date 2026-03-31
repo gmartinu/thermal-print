@@ -5,9 +5,9 @@ import {
   generateDividerLine,
   isBold,
   isDashedBorder,
-  mapFontSizeToESCPOS,
   mapTextAlign,
 } from "./styles";
+import type { FontMode } from "./converter";
 import { ConversionContext } from "./types";
 import { CommandAdapter, ESCPOSCommandAdapter } from "./command-adapters";
 
@@ -44,6 +44,13 @@ class ESCPOSBuffer {
   get size(): number {
     return this.buffer.length;
   }
+
+  /**
+   * Get the last byte in the buffer
+   */
+  lastByte(): number | undefined {
+    return this.buffer.length > 0 ? this.buffer[this.buffer.length - 1] : undefined;
+  }
 }
 
 /**
@@ -55,13 +62,19 @@ export class ESCPOSGenerator {
   private buffer: ESCPOSBuffer;
   private context: ConversionContext;
   private commandAdapter: CommandAdapter;
+  private fontMode: FontMode;
+  private compact: boolean;
 
   constructor(
-    paperWidth = 48,
+    paperWidth = 42,
     encoding = "cp860",
     debug = false,
-    commandAdapter?: CommandAdapter
+    commandAdapter?: CommandAdapter,
+    fontMode: FontMode = "medium",
+    compact = false
   ) {
+    this.fontMode = fontMode;
+    this.compact = compact;
     this.buffer = new ESCPOSBuffer();
 
     // Use provided adapter or default to ESC/POS
@@ -88,11 +101,13 @@ export class ESCPOSGenerator {
    * Sets up the printer with default settings and comfortable line spacing
    */
   initialize(): void {
-    // Initialize with comfortable line spacing (30 dots ≈ default 1/6 inch)
-    // Common values: 10 (tight), 20 (moderate), 30 (default), 40 (spacious)
-    this.setLineSpacing(5);
+    // Line spacing:
+    // - compact=true: 5 dots (tightest practical spacing)
+    // - compact=false: default spacing (ESC 2)
+    const lineSpacing = this.compact ? 1 : undefined;
+    this.setLineSpacing(lineSpacing);
 
-    // Apply initial print mode with Font A (48 cols) as default
+    // Apply initial print mode
     this.applyPrintMode();
   }
 
@@ -128,52 +143,33 @@ export class ESCPOSGenerator {
   }
 
   /**
-   * Set text size using width/height multipliers and font selection
-   * Uses ESC ! command which combines size, font, and emphasis
-   * @param size - Character size with font: {font, width, height}
+   * Set text size using width and height multipliers
+   * Uses ESC ! command which combines size and emphasis
+   * @param size - Character size as {width, height} multipliers (max 2x2 for ESC !)
    */
-  setSize(size: { width: number; height: number; font?: 0 | 1 }): void {
-    const font = size.font ?? 0;
-    // Only update if size or font actually changed
+  setSize(size: { width: number; height: number }): void {
+    // Only update if size actually changed
     if (
       this.context.currentSize.width !== size.width ||
-      this.context.currentSize.height !== size.height ||
-      this.context.currentFont !== font
+      this.context.currentSize.height !== size.height
     ) {
       this.context.currentSize = size;
-      this.context.currentFont = font;
-      this.updatePaperWidth();
       this.applyPrintMode();
     }
   }
 
   /**
-   * Update effective paper width based on current font and size
-   * Font A 1x1 → 48 cols, Font A 2x → 24 cols, Font B 1x1 → 64 cols
-   */
-  private updatePaperWidth(): void {
-    if (this.context.currentFont === 1) {
-      // Font B: 64 cols
-      this.context.paperWidth = 64;
-    } else if (this.context.currentSize.width >= 2) {
-      // Font A double-width: 24 cols
-      this.context.paperWidth = Math.floor(this.context.basePaperWidth / 2);
-    } else {
-      // Font A normal: 48 cols (basePaperWidth)
-      this.context.paperWidth = this.context.basePaperWidth;
-    }
-  }
-
-  /**
-   * Apply current print mode (font + size + bold) using command adapter
-   * This combines font selection, character size, and emphasis into a single command
+   * Apply current print mode (size + bold + font) using command adapter.
+   * Uses fontMode to determine Font A vs Font B base.
    */
   private applyPrintMode(): void {
+    // For "small" mode, use Font B (bit 0 = 1). For "medium", use Font A (bit 0 = 0).
+    const useFontB = this.fontMode === "small";
     const command = this.commandAdapter.getCharacterSizeCommand(
       this.context.currentSize.width,
       this.context.currentSize.height,
       this.context.currentBold,
-      this.context.currentFont
+      useFontB
     );
     this.buffer.pushArray(command);
   }
@@ -185,7 +181,7 @@ export class ESCPOSGenerator {
   resetFormatting(): void {
     this.setAlign("left");
     this.setBold(false);
-    this.setSize({ width: 1, height: 1, font: 0 });
+    this.setSize({ width: 1, height: 1 });
   }
 
   /**
@@ -200,9 +196,13 @@ export class ESCPOSGenerator {
   }
 
   /**
-   * Add newline using command adapter
+   * Add newline using command adapter.
+   * In compact mode, skips if the buffer already ends with a LF (prevents double spacing).
    */
   addNewline(count = 1): void {
+    if (this.compact && count === 1 && this.buffer.lastByte() === 0x0a) {
+      return; // Skip duplicate LF in compact mode
+    }
     const command = this.commandAdapter.getLineFeedCommand(count);
     this.buffer.pushArray(command);
   }
@@ -216,13 +216,21 @@ export class ESCPOSGenerator {
   }
 
   /**
-   * Add divider line
+   * Add divider line.
+   * In compact mode, avoids emitting a leading LF if the buffer already ends with one.
    */
   addDivider(dashed = false): void {
     this.setAlign("left");
     const line = generateDividerLine(this.context.paperWidth, dashed);
     this.addText(line);
     this.addNewline();
+  }
+
+  /**
+   * Check if the last byte in the buffer is a LF
+   */
+  lastByteIsLF(): boolean {
+    return this.buffer.lastByte() === 0x0a;
   }
 
   /**
@@ -337,7 +345,9 @@ export class ESCPOSGenerator {
   }
 
   /**
-   * Apply text styles from style object
+   * Apply text styles from style object.
+   * When fontMode is set, fontSize from components is IGNORED for font selection.
+   * The fontMode determines the global ESC/POS font (small/medium/large).
    */
   applyTextStyle(style: any): void {
     const textStyle = extractTextStyle(style);
@@ -350,9 +360,18 @@ export class ESCPOSGenerator {
     const bold = isBold(textStyle);
     this.setBold(bold);
 
-    // Set size (includes font selection based on fontSize)
-    const size = mapFontSizeToESCPOS(textStyle.fontSize);
+    // Font mode determines the fixed size — fontSize from components is ignored
+    const size = this.getFontModeSize();
     this.setSize(size);
+  }
+
+  /**
+   * Get the ESC/POS character size based on the global fontMode.
+   * - small: Font B 1x1 (64 cols)
+   * - medium: Font A 1x1 (48 cols)
+   */
+  private getFontModeSize(): { width: number; height: number } {
+    return { width: 1, height: 1 };
   }
 
   /**
