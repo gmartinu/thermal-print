@@ -78,7 +78,11 @@ type TextAlign = "left" | "center" | "right";
 
 // Large initial height for dynamic sizing (will be trimmed after content is rendered)
 // Must be large enough to fit all content - will be trimmed by finalizePageHeight()
-const DYNAMIC_HEIGHT_INITIAL = 5000;
+// 14400pt is the PDF spec maximum (200 inches), so we use that as our upper bound
+const DYNAMIC_HEIGHT_INITIAL = 14400;
+
+// jsPDF / PDF spec maximum page dimension (14400 user units = 200 inches)
+const JSPDF_MAX_PAGE_HEIGHT = 14400;
 
 export class PDFGenerator {
   private pdf!: jsPDF;
@@ -148,18 +152,20 @@ export class PDFGenerator {
       );
     }
 
-    // Determine orientation: use explicit option, or auto-detect from dimensions
-    const isLandscape =
-      options.orientation === "landscape" ||
-      (options.orientation === undefined &&
-        this.options.paperWidth > this.actualPaperHeight);
+    // Determine orientation: only use landscape when explicitly requested.
+    // Auto-detection from dimensions was causing jsPDF to swap width/height
+    // for short receipts (where paperWidth > contentHeight), breaking layout.
+    const isLandscape = options.orientation === "landscape";
+
+    // Ensure page height doesn't exceed jsPDF's maximum (14400pt = 200in)
+    const clampedHeight = Math.min(this.actualPaperHeight, JSPDF_MAX_PAGE_HEIGHT);
 
     // Always create jsPDF - needed for font metrics even in measurement mode
-    // Note: format is always [width, height] - jsPDF handles rotation via orientation param
+    // Note: format is always [width, height] - orientation only affects predefined sizes
     this.pdf = new jsPDF({
       orientation: isLandscape ? "landscape" : "portrait",
       unit: "pt", // POINTS - matches react-pdf
-      format: [this.options.paperWidth, this.actualPaperHeight],
+      format: [this.options.paperWidth, clampedHeight],
     });
 
     if (!this.measurementMode) {
@@ -184,6 +190,20 @@ export class PDFGenerator {
   }
 
   /**
+   * Create a rendering generator with page breaks disabled
+   * Used for the second pass of two-pass rendering
+   */
+  static createForRendering(
+    options: PDFGeneratorOptions,
+    noPageBreaks: boolean
+  ): PDFGenerator {
+    return new PDFGenerator({
+      ...options,
+      _noPageBreaks: noPageBreaks,
+    });
+  }
+
+  /**
    * Check if this generator is in measurement mode
    */
   isMeasurementMode(): boolean {
@@ -192,9 +212,11 @@ export class PDFGenerator {
 
   /**
    * Get the calculated content height (for measurement pass)
-   * @param bottomMargin - Bottom margin in points (default: 5pt)
+   * Adds a safety margin to prevent edge-case truncation from accumulated
+   * floating-point differences between measurement and rendering passes.
+   * @param bottomMargin - Bottom margin in points (default: 20pt)
    */
-  getContentHeight(bottomMargin: number = 5): number {
+  getContentHeight(bottomMargin: number = 20): number {
     return this.currentY + bottomMargin;
   }
 
@@ -611,23 +633,24 @@ export class PDFGenerator {
     width?: number,
     height?: number
   ): Promise<void> {
-    try {
-      // Default width to content width, maintain aspect ratio
-      const imgWidth = width ?? this.contentWidth * 0.5;
-      const imgHeight = height ?? imgWidth; // Square by default
+    // Default width to content width, maintain aspect ratio
+    const imgWidth = width ?? this.contentWidth * 0.5;
+    const imgHeight = height ?? imgWidth; // Square by default
 
-      // Skip actual rendering in measurement mode, but still track Y position
-      if (!this.measurementMode) {
+    // Skip actual rendering in measurement mode, but still track Y position
+    if (!this.measurementMode) {
+      try {
         const x = this.getImageXPosition(imgWidth);
         // Add the image
         this.pdf.addImage(source, "PNG", x, this.currentY, imgWidth, imgHeight);
+      } catch (error) {
+        console.error("[PDFGenerator] Failed to add image:", error);
       }
-
-      // Advance Y position (no extra newline - View margins handle spacing)
-      this.currentY += imgHeight;
-    } catch (error) {
-      console.error("[PDFGenerator] Failed to add image:", error);
     }
+
+    // Always advance Y position, even if image rendering fails
+    // This keeps measurement and rendering passes in sync
+    this.currentY += imgHeight;
   }
 
   /**
