@@ -311,8 +311,15 @@ export async function printNodesToPDF(
     const measureTraverser = new PDFTraverser(measureGenerator);
     await measureTraverser.traverse(printNode);
 
-    actualPaperHeight = measureGenerator.getContentHeight();
-    console.log(`[printNodesToPDF] Measurement complete: content height = ${actualPaperHeight}pt`);
+    const measuredHeight = measureGenerator.getContentHeight();
+    console.log(`[printNodesToPDF] Measurement complete: content height = ${measuredHeight}pt`);
+
+    // Add a safety margin to prevent truncation from accumulated floating-point
+    // differences between measurement and rendering passes.
+    // Uses 2% of content height (minimum 20pt) on top of getContentHeight()'s own margin.
+    const safetyMargin = Math.max(20, measuredHeight * 0.02);
+    actualPaperHeight = measuredHeight + safetyMargin;
+    console.log(`[printNodesToPDF] With safety margin: ${actualPaperHeight}pt (+${safetyMargin.toFixed(1)}pt)`);
   } else {
     actualPaperHeight = paperHeight;
   }
@@ -325,17 +332,20 @@ export async function printNodesToPDF(
   // - OR when using dynamic height (calculated from measurement pass)
   const shouldDisablePageBreaks = pageWrap === true || paperHeight === 'auto';
 
-  const generator = new (PDFGenerator as any)({
+  const generator = PDFGenerator.createForRendering({
     paperWidth,
     paperHeight: actualPaperHeight,
     ...generatorOptions,
-    _noPageBreaks: shouldDisablePageBreaks,
-  });
+  }, shouldDisablePageBreaks);
 
   const traverser = new PDFTraverser(generator);
 
   // Traverse the PrintNode tree and generate PDF
   await traverser.traverse(printNode);
+
+  // Log final rendering Y for comparison with measurement
+  const renderingHeight = generator.getContentHeight(0);
+  console.log(`[printNodesToPDF] Rendering complete: final Y = ${renderingHeight}pt (page height = ${actualPaperHeight}pt, delta = ${(actualPaperHeight - renderingHeight).toFixed(1)}pt)`);
 
   // Finalize (no-op with two-pass rendering, kept for backwards compatibility)
   generator.finalizePageHeight();
