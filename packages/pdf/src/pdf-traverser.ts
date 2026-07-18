@@ -19,6 +19,8 @@ function extractTextStyle(style: any): {
   fontWeight?: string | number;
   fontFamily?: string;
   textAlign?: "left" | "center" | "right";
+  color?: string;
+  backgroundColor?: string;
 } {
   if (!style) return {};
 
@@ -27,6 +29,8 @@ function extractTextStyle(style: any): {
     fontWeight: style.fontWeight,
     fontFamily: style.fontFamily,
     textAlign: style.textAlign,
+    color: style.color,
+    backgroundColor: style.backgroundColor,
   };
 }
 
@@ -533,6 +537,14 @@ export class PDFTraverser {
     // Apply bold
     if (isBold(node.style)) {
       this.generator.setBold(true);
+    }
+
+    // Apply text color and background band (inverted highlights)
+    if (textStyle.color) {
+      this.generator.setTextColor(textStyle.color);
+    }
+    if (textStyle.backgroundColor) {
+      this.generator.setBackgroundColor(textStyle.backgroundColor);
     }
 
     // Collect ALL text content from this Text element and its TextNode children

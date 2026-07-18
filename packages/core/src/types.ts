@@ -112,6 +112,30 @@ export interface TextStyle {
    * @example paddingRight: 10 // 10px right padding in PDF
    */
   paddingRight?: number;
+
+  /**
+   * Text color (HTML/PDF ONLY)
+   *
+   * ⚠️ ESC/POS: Completely ignored (monochrome thermal printers).
+   * ✅ PDF: Applied via jsPDF setTextColor.
+   *
+   * Intended for inverted highlights (white text on black background).
+   *
+   * @example color: '#ffffff' // white text (use with backgroundColor)
+   */
+  color?: string;
+
+  /**
+   * Background color behind the text line (HTML/PDF ONLY)
+   *
+   * ⚠️ ESC/POS: Completely ignored for now (future: may map to GS B reverse mode).
+   * ✅ PDF: Fills the full content width behind each rendered text line.
+   *
+   * Intended for inverted highlights (e.g. giant order number, black band).
+   *
+   * @example backgroundColor: '#000000' // black band behind the text
+   */
+  backgroundColor?: string;
 }
 
 /**

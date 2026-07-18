@@ -102,6 +102,8 @@ export class PDFGenerator {
   private currentAlign: TextAlign = "left";
   private currentFontSize: number;
   private isBold: boolean = false;
+  private currentTextColor: string = "#000000";
+  private currentBgColor: string | undefined = undefined;
 
   // Margin stack for nested views
   private marginLeft: number = 0;
@@ -401,13 +403,45 @@ export class PDFGenerator {
   }
 
   /**
+   * Set text color (hex string like "#ffffff")
+   */
+  setTextColor(color: string): void {
+    this.currentTextColor = color;
+  }
+
+  /**
+   * Set background color drawn behind each text line (hex string like "#000000")
+   * Pass undefined to disable.
+   */
+  setBackgroundColor(color: string | undefined): void {
+    this.currentBgColor = color;
+  }
+
+  /**
    * Reset formatting to defaults
    */
   resetFormatting(): void {
     this.currentAlign = "left";
     this.currentFontSize = this.options.defaultFontSize;
     this.isBold = false;
+    this.currentTextColor = "#000000";
+    this.currentBgColor = undefined;
     this.applyFont();
+  }
+
+  /**
+   * Draw the background band for the current line (full content width)
+   * Height matches the line advance (fontSize * lineHeight) so consecutive
+   * highlighted lines form a continuous band.
+   */
+  private drawLineBackground(): void {
+    if (!this.currentBgColor || this.measurementMode) return;
+
+    const lineHeightPt = this.currentFontSize * this.options.lineHeight;
+    const x = this.marginLeft;
+    const y = this.currentY;
+    this.pdf.setFillColor(this.currentBgColor);
+    this.pdf.rect(x, y, this.contentWidth, lineHeightPt, "F");
   }
 
   /**
@@ -459,6 +493,9 @@ export class PDFGenerator {
               line.length > 20 ? "..." : ""
             }", x=${roundedX}, y=${roundedY}, fontSize=${this.currentFontSize}pt)`
           );
+
+          this.drawLineBackground();
+          this.pdf.setTextColor(this.currentTextColor);
 
           // Use 'top' baseline so Y represents the top of text, not the baseline
           // This matches how @react-pdf positions text
@@ -514,6 +551,7 @@ export class PDFGenerator {
     );
 
     // Use jsPDF's native alignment - more precise than manual calculation
+    this.pdf.setTextColor(this.currentTextColor);
     this.pdf.text(text, roundedX, roundedY, {
       align: alignOption,
       baseline: "top",
@@ -540,6 +578,7 @@ export class PDFGenerator {
       }", x=${roundedX}, y=${roundedY})`
     );
 
+    this.pdf.setTextColor(this.currentTextColor);
     this.pdf.text(text, roundedX, roundedY, { baseline: "top" });
   }
 

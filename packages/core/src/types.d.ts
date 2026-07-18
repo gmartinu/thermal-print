@@ -73,6 +73,16 @@ export interface TextStyle {
      * @example textAlign: 'center'
      */
     textAlign?: 'left' | 'center' | 'right';
+    /**
+     * Text color (HTML/PDF ONLY — ESC/POS ignores it)
+     * @example color: '#ffffff'
+     */
+    color?: string;
+    /**
+     * Background color behind the text line (HTML/PDF ONLY — ESC/POS ignores it for now)
+     * @example backgroundColor: '#000000'
+     */
+    backgroundColor?: string;
 }
 /**
  * View/Layout styling properties for container elements
