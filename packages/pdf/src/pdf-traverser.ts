@@ -586,17 +586,26 @@ export class PDFTraverser {
 
   /**
    * Natural (unwrapped) width of every column, measured with its own font.
-   * Leaves the generator's font on the last column's settings - every render
-   * path below re-applies the font per column before drawing.
+   *
+   * Font sizes deliberately leak FORWARD inside the loop (a column without
+   * its own fontSize measures at the previous column's size) because the
+   * render loops below apply fonts the same way — measurement must mirror
+   * rendering. The ambient size is restored at the END so the render loop
+   * starts from the same font state it would have had without a measurement
+   * pass; otherwise the FIRST column, when it has no fontSize of its own,
+   * would render at the LAST measured column's size.
    */
   private measureColumns(columns: RowColumn[]): number[] {
-    return columns.map((col) => {
+    const ambientFontSize = this.generator.getCurrentFontSize();
+    const widths = columns.map((col) => {
       if (col.fontSize) this.generator.setFontSize(col.fontSize);
       if (col.bold) this.generator.setBold(true);
       const width = this.generator.getTextWidth(col.content);
       if (col.bold) this.generator.setBold(false);
       return width;
     });
+    this.generator.setFontSizePoints(ambientFontSize);
+    return widths;
   }
 
   /**

@@ -21,6 +21,8 @@ interface DrawnText {
   align: string;
   /** width measured with the font that was active at draw time */
   width: number;
+  /** font size (pt) active at draw time */
+  fontSize: number;
 }
 
 /**
@@ -39,6 +41,7 @@ function captureText(generator: PDFGenerator): DrawnText[] {
       y,
       align: options.align ?? "left",
       width: pdf.getTextWidth(text),
+      fontSize: pdf.getFontSize(),
     });
     return original(text, x, y, options);
   };
@@ -299,6 +302,27 @@ describe("PDFTraverser row layouts", () => {
     }
     const value = drawn.find((d) => d.text === "199,90");
     assert.ok(value, "the value column must still be printed");
+  });
+
+  it("does not leak the measured font size into a column without its own", async () => {
+    // Regression: measureColumns() used to leave the LAST measured column's
+    // fontSize applied, so a leading column without fontSize rendered at the
+    // trailing column's size instead of the ambient default (10pt).
+    const row = node(
+      "view",
+      { flexDirection: "row", justifyContent: "space-between" },
+      [
+        node("view", {}, [textNode("TOTAL")]),
+        node("view", {}, [textNode("12,00", { fontSize: 14 })]),
+      ]
+    );
+    const { drawn } = await render(receipt([row]));
+
+    const total = drawn.find((d) => d.text === "TOTAL");
+    const value = drawn.find((d) => d.text === "12,00");
+    assert.ok(total && value);
+    assert.equal(total!.fontSize, 10, "ambient column must keep the default size");
+    assert.equal(value!.fontSize, 14);
   });
 
   it("keeps a short space-between row on one line (no layout change)", async () => {
