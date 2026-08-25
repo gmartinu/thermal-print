@@ -445,7 +445,93 @@ export class PDFGenerator {
   }
 
   /**
-   * Add text to the PDF
+   * Split text into physical lines that fit `maxWidth` using the CURRENT font.
+   *
+   * Always safe: any failure (invalid width, jsPDF throwing on exotic input)
+   * degrades to the original text on a single line, i.e. the old behavior.
+   */
+  private splitToWidth(text: string, maxWidth: number): string[] {
+    if (!Number.isFinite(maxWidth) || maxWidth <= 0) return [text];
+    try {
+      const lines = this.pdf.splitTextToSize(text, maxWidth);
+      if (Array.isArray(lines) && lines.length > 0) return lines;
+      return [text];
+    } catch (error) {
+      console.warn(
+        `[PDFGenerator] splitTextToSize failed for "${text.substring(0, 20)}":`,
+        error
+      );
+      return [text];
+    }
+  }
+
+  /**
+   * Split text to a width without rendering it (used by layout code that needs
+   * to know how tall a block will be before placing it).
+   */
+  splitTextToWidth(text: string, maxWidth: number): string[] {
+    if (!text) return [];
+    return this.splitToWidth(text, maxWidth);
+  }
+
+  /**
+   * Vertical advance of a single line, in points.
+   * @param fontSizePt - font size to measure with (defaults to the current one)
+   */
+  getLineAdvance(fontSizePt?: number): number {
+    const size = fontSizePt ?? this.currentFontSize;
+    return size * this.options.lineHeight;
+  }
+
+  /**
+   * Draw one already-fitted line at the current Y, honoring current alignment.
+   */
+  private drawTextLine(line: string): void {
+    // Calculate X position manually to avoid jsPDF alignment bugs
+    const x = this.calculateTextX();
+
+    if (!Number.isFinite(x)) {
+      console.warn(
+        `[PDFGenerator] Invalid X coordinate: ${x}, skipping text: "${line}"`
+      );
+      return;
+    }
+
+    // Round coordinates to 2 decimal places to avoid jsPDF floating point issues
+    const roundedX = Math.round(x * 100) / 100;
+    const roundedY = Math.round(this.currentY * 100) / 100;
+
+    // Skip actual rendering in measurement mode (only track positions)
+    if (this.measurementMode) return;
+
+    // Log each text placement for debugging
+    console.log(
+      `[PDFGenerator] text("${line.substring(0, 20)}${
+        line.length > 20 ? "..." : ""
+      }", x=${roundedX}, y=${roundedY}, fontSize=${this.currentFontSize}pt)`
+    );
+
+    this.drawLineBackground();
+    this.pdf.setTextColor(this.currentTextColor);
+
+    // Use 'top' baseline so Y represents the top of text, not the baseline
+    // This matches how @react-pdf positions text
+    // Use jsPDF's native alignment for more precise positioning
+    this.pdf.text(line, roundedX, roundedY, {
+      align: this.currentAlign,
+      baseline: "top",
+    });
+  }
+
+  /**
+   * Add text to the PDF, wrapping it to the current content width.
+   *
+   * Historically this drew the whole string on one line, so anything wider than
+   * the paper was silently CLIPPED by the media box (DEV-2510: receipts cut off
+   * on the right). The ESC/POS renderer has always wrapped; PDF now matches it.
+   *
+   * Y is advanced between wrapped lines only — the caller still owns the
+   * trailing newline, as before.
    */
   addText(text: string): void {
     if (!text) return;
@@ -463,50 +549,22 @@ export class PDFGenerator {
       this.currentY = 0.1;
     }
 
-    // Split text into lines if it contains newlines
-    const lines = text.split("\n");
-
-    for (const line of lines) {
-      if (line.trim()) {
-        // Get text width for positioning
-        const textWidth = this.pdf.getTextWidth(line);
-
-        // Calculate X position manually to avoid jsPDF alignment bugs
-        const x = this.calculateTextX(line, textWidth);
-
-        if (!Number.isFinite(x)) {
-          console.warn(
-            `[PDFGenerator] Invalid X coordinate: ${x}, skipping text: "${line}"`
-          );
-          continue;
-        }
-
-        // Round coordinates to 2 decimal places to avoid jsPDF floating point issues
-        const roundedX = Math.round(x * 100) / 100;
-        const roundedY = Math.round(this.currentY * 100) / 100;
-
-        // Skip actual rendering in measurement mode (only track positions)
-        if (!this.measurementMode) {
-          // Log each text placement for debugging
-          console.log(
-            `[PDFGenerator] text("${line.substring(0, 20)}${
-              line.length > 20 ? "..." : ""
-            }", x=${roundedX}, y=${roundedY}, fontSize=${this.currentFontSize}pt)`
-          );
-
-          this.drawLineBackground();
-          this.pdf.setTextColor(this.currentTextColor);
-
-          // Use 'top' baseline so Y represents the top of text, not the baseline
-          // This matches how @react-pdf positions text
-          // Use jsPDF's native alignment for more precise positioning
-          this.pdf.text(line, roundedX, roundedY, {
-            align: this.currentAlign,
-            baseline: "top",
-          });
-        }
+    // Honor explicit newlines first, then word-wrap each segment to the width
+    // actually available (content width minus the current nesting padding).
+    const lines: string[] = [];
+    for (const segment of text.split("\n")) {
+      if (!segment.trim()) {
+        lines.push("");
+        continue;
       }
-      if (lines.length > 1) {
+      lines.push(...this.splitToWidth(segment, this.contentWidth));
+    }
+
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].trim()) {
+        this.drawTextLine(lines[i]);
+      }
+      if (i < lines.length - 1) {
         this.addNewline();
       }
     }
@@ -583,13 +641,83 @@ export class PDFGenerator {
   }
 
   /**
+   * Add a block of text inside a column box, WITHOUT advancing Y.
+   *
+   * Wraps to `maxWidth` (the column's own box) so a long cell no longer bleeds
+   * over its neighbour and off the right edge of the paper (DEV-2510).
+   * Returns how many physical lines were used so the row can grow to fit the
+   * tallest column.
+   *
+   * @param xOffset - offset from the left margin, in points
+   * @param maxWidth - width of the column box, in points
+   * @param align - alignment INSIDE the box
+   */
+  addTextBlockAtX(
+    text: string,
+    xOffset: number,
+    maxWidth: number,
+    align: TextAlign = "left"
+  ): number {
+    if (!text) return 0;
+
+    const usableWidth =
+      Number.isFinite(maxWidth) && maxWidth > 0
+        ? maxWidth
+        : Math.max(this.contentWidth - xOffset, 1);
+
+    const lines = this.splitToWidth(text, usableWidth);
+
+    // Measurement pass still needs the line count (both passes must agree on
+    // height), but must not draw.
+    if (!this.measurementMode) {
+      const left = this.marginLeft + xOffset;
+      let anchorX: number;
+      let alignOption: TextAlign;
+      switch (align) {
+        case "center":
+          anchorX = left + usableWidth / 2;
+          alignOption = "center";
+          break;
+        case "right":
+          anchorX = left + usableWidth;
+          alignOption = "right";
+          break;
+        default:
+          anchorX = left;
+          alignOption = "left";
+      }
+
+      const lineAdvance = this.getLineAdvance();
+      this.pdf.setTextColor(this.currentTextColor);
+
+      lines.forEach((line, index) => {
+        if (!line.trim()) return;
+        const roundedX = Math.round(anchorX * 100) / 100;
+        const roundedY =
+          Math.round((this.currentY + index * lineAdvance) * 100) / 100;
+        console.log(
+          `[PDFGenerator] textBlockAtX("${line.substring(0, 20)}${
+            line.length > 20 ? "..." : ""
+          }", x=${roundedX}, y=${roundedY}, w=${Math.round(usableWidth)})`
+        );
+        this.pdf.text(line, roundedX, roundedY, {
+          align: alignOption,
+          baseline: "top",
+        });
+      });
+    }
+
+    return Math.max(lines.length, 1);
+  }
+
+  /**
    * Calculate X position for text based on alignment
    * Returns anchor point for jsPDF's native alignment:
    * - left: left edge
    * - center: center point
    * - right: right edge
    */
-  private calculateTextX(text: string, textWidth?: number): number {
+  private calculateTextX(): number {
     switch (this.currentAlign) {
       case "center": {
         // Center point of content area
@@ -607,18 +735,16 @@ export class PDFGenerator {
   }
 
   /**
-   * Add text with automatic word wrapping
+   * Add text with automatic word wrapping, then close the paragraph.
+   *
+   * Kept for API compatibility: addText() itself wraps now, so this is just
+   * addText() plus the trailing newline.
    */
   addWrappedText(text: string): void {
     if (!text) return;
 
-    const maxWidth = this.contentWidth;
-    const lines = this.pdf.splitTextToSize(text, maxWidth);
-
-    for (const line of lines) {
-      this.addText(line);
-      this.addNewline();
-    }
+    this.addText(text);
+    this.addNewline();
   }
 
   /**
@@ -690,20 +816,6 @@ export class PDFGenerator {
     // Always advance Y position, even if image rendering fails
     // This keeps measurement and rendering passes in sync
     this.currentY += imgHeight;
-  }
-
-  /**
-   * Get X position based on current alignment
-   */
-  private getXPosition(): number {
-    switch (this.currentAlign) {
-      case "center":
-        return this.marginLeft + this.contentWidth / 2;
-      case "right":
-        return this.options.paperWidth - this.marginRight;
-      default:
-        return this.marginLeft;
-    }
   }
 
   /**
