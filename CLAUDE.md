@@ -247,6 +247,16 @@ The `@thermal-print/pdf` package provides vector PDF generation from PrintNode t
 4. **CSS Box Model**: Views follow margin → border → padding → content order
    - Implemented in `handleView()` in pdf-traverser.ts
 
+5. **Text wraps, never clips**: draw block text with `addText()` and row cells with
+   `addTextBlockAtX()` — never place long content with the unbounded `addTextAtX()`.
+   Both wrapping and line counting must also run in measurement mode or the two-pass
+   height goes wrong. See [docs/PDF_TEXT_WRAPPING.md](docs/PDF_TEXT_WRAPPING.md).
+
+### Tests
+
+`pnpm --filter @thermal-print/pdf test` (node:test via tsx, no extra runner).
+Wrapping/row-height regressions live in `packages/pdf/test/pdf-wrap.test.ts`.
+
 ### Common Issues
 
 - **Page breaks with `wrap=true`**: Check that `wrap` prop is being read (index.ts lines 255-272)
