@@ -110,6 +110,22 @@ function parsePercentage(value: string | number | undefined): number | undefined
   return undefined;
 }
 
+/**
+ * Horizontal breathing room kept between adjacent column boxes, in points.
+ * Without it a wrapped cell can touch the next column's first glyph.
+ */
+const COLUMN_GUTTER = 2;
+
+/** A single cell of a `flexDirection: "row"` View. */
+interface RowColumn {
+  content: string;
+  fontSize?: number;
+  bold: boolean;
+  align: "left" | "center" | "right";
+  /** percentage as decimal (0.20 for "20%") */
+  width?: number;
+}
+
 function isBold(style: any): boolean {
   if (!style) return false;
 
@@ -310,13 +326,7 @@ export class PDFTraverser {
     const isCenter = viewStyle.justifyContent === "center";
 
     // Collect column data with text content, styles, and widths
-    const columns: {
-      content: string;
-      fontSize?: number;
-      bold: boolean;
-      align: "left" | "center" | "right";
-      width?: number; // percentage as decimal (0.20 for "20%")
-    }[] = [];
+    const columns: RowColumn[] = [];
 
     for (const child of children) {
       const content = this.collectTextContent(child);
@@ -360,14 +370,37 @@ export class PDFTraverser {
     const hasExplicitWidths = columns.some((c) => c.width !== undefined);
 
     if (hasExplicitWidths) {
-      // Position columns based on their explicit widths
+      // Position columns based on their explicit widths.
+      // Each column is wrapped inside its OWN box, so a long cell grows the row
+      // downwards instead of running over the next column and off the paper.
       let xOffset = 0;
-      for (const col of columns) {
+      let extraHeight = 0;
+
+      for (let i = 0; i < columns.length; i++) {
+        const col = columns[i];
         if (col.fontSize) this.generator.setFontSize(col.fontSize);
         if (col.bold) this.generator.setBold(true);
 
+        const remaining = Math.max(contentWidth - xOffset, 1);
+        const boxWidth =
+          col.width !== undefined
+            ? Math.min(col.width * contentWidth, remaining)
+            : remaining;
+        const isLast = i === columns.length - 1;
+        const usableWidth = isLast
+          ? boxWidth
+          : Math.max(boxWidth - COLUMN_GUTTER, 1);
+
         // Position text at the start of this column
-        this.generator.addTextAtX(col.content, xOffset);
+        const lines = this.generator.addTextBlockAtX(
+          col.content,
+          xOffset,
+          usableWidth
+        );
+        extraHeight = Math.max(
+          extraHeight,
+          (lines - 1) * this.generator.getLineAdvance()
+        );
 
         // Move to the next column position
         if (col.width !== undefined) {
@@ -379,25 +412,32 @@ export class PDFTraverser {
       // Add newline BEFORE reset so it uses the row's font size
       if (rowFontSize) this.generator.setFontSize(rowFontSize);
       this.generator.addNewline();
+      if (extraHeight > 0) this.generator.addSpacing(extraHeight);
       this.generator.resetFormatting();
     } else if (isCenter && columns.length >= 1) {
       // Handle center layout: group all columns and center them together
       // First, calculate total width of all text with spacing
-      let totalWidth = 0;
-      const columnWidths: number[] = [];
-
-      for (const col of columns) {
-        if (col.fontSize) this.generator.setFontSize(col.fontSize);
-        if (col.bold) this.generator.setBold(true);
-        const width = this.generator.getTextWidth(col.content);
-        columnWidths.push(width);
-        totalWidth += width;
-        if (col.bold) this.generator.setBold(false);
-      }
+      const columnWidths = this.measureColumns(columns);
+      let totalWidth = columnWidths.reduce((sum, w) => sum + w, 0);
 
       // Add small gap between columns (5pt per gap)
       const gap = 5;
       totalWidth += gap * (columns.length - 1);
+
+      // The group does not fit on one line: stack each column as its own
+      // centered wrapped block instead of letting it spill off the paper.
+      if (totalWidth > contentWidth) {
+        for (const col of columns) {
+          if (col.fontSize) this.generator.setFontSize(col.fontSize);
+          if (col.bold) this.generator.setBold(true);
+          this.generator.setAlign("center");
+          this.generator.addText(col.content);
+          this.generator.addNewline();
+          if (col.bold) this.generator.setBold(false);
+        }
+        this.generator.resetFormatting();
+        return;
+      }
 
       // Calculate starting X offset to center the group
       const startX = (contentWidth - totalWidth) / 2;
@@ -420,33 +460,87 @@ export class PDFTraverser {
       this.generator.resetFormatting();
     } else if (isSpaceBetween && columns.length >= 2) {
       // Handle space-between layout: first at left, last at right, middle distributed
+      const naturalWidths = this.measureColumns(columns);
+      const gap = COLUMN_GUTTER * 2;
+      const naturalTotal =
+        naturalWidths.reduce((sum, w) => sum + w, 0) +
+        gap * (columns.length - 1);
+
+      if (naturalTotal <= contentWidth) {
+        // Everything fits on one line - keep the exact single-line placement
+        for (let i = 0; i < columns.length; i++) {
+          const col = columns[i];
+          if (col.fontSize) this.generator.setFontSize(col.fontSize);
+          if (col.bold) this.generator.setBold(true);
+
+          if (i === 0) {
+            // First column: left-aligned
+            this.generator.addTextAtPosition(col.content, "left");
+          } else if (i === columns.length - 1) {
+            // Last column: right-aligned
+            this.generator.addTextAtPosition(col.content, "right");
+          } else {
+            // Middle columns: distributed evenly
+            const spacing = contentWidth / (columns.length - 1);
+            const xOffset = i * spacing;
+            this.generator.addTextAtX(col.content, xOffset);
+          }
+
+          if (col.bold) this.generator.setBold(false);
+        }
+        if (rowFontSize) this.generator.setFontSize(rowFontSize);
+        this.generator.addNewline();
+        this.generator.resetFormatting();
+        return;
+      }
+
+      // Does not fit: give the trailing column (usually a value) its natural
+      // width and wrap the remaining columns into what is left.
+      const lastIndex = columns.length - 1;
+      const lastWidth = Math.min(
+        Math.max(naturalWidths[lastIndex], 1),
+        contentWidth * 0.5
+      );
+      const leadingWidth = Math.max(
+        contentWidth - lastWidth - gap,
+        1
+      );
+      const leadingSlot = leadingWidth / lastIndex;
+      let extraHeight = 0;
+
       for (let i = 0; i < columns.length; i++) {
         const col = columns[i];
         if (col.fontSize) this.generator.setFontSize(col.fontSize);
         if (col.bold) this.generator.setBold(true);
 
-        if (i === 0) {
-          // First column: left-aligned
-          this.generator.addTextAtPosition(col.content, "left");
-        } else if (i === columns.length - 1) {
-          // Last column: right-aligned
-          this.generator.addTextAtPosition(col.content, "right");
-        } else {
-          // Middle columns: distributed evenly
-          const spacing = contentWidth / (columns.length - 1);
-          const xOffset = i * spacing;
-          this.generator.addTextAtX(col.content, xOffset);
-        }
+        const lines =
+          i === lastIndex
+            ? this.generator.addTextBlockAtX(
+                col.content,
+                contentWidth - lastWidth,
+                lastWidth,
+                "right"
+              )
+            : this.generator.addTextBlockAtX(
+                col.content,
+                i * leadingSlot,
+                Math.max(leadingSlot - COLUMN_GUTTER, 1)
+              );
+        extraHeight = Math.max(
+          extraHeight,
+          (lines - 1) * this.generator.getLineAdvance()
+        );
 
         if (col.bold) this.generator.setBold(false);
       }
-      // Add newline BEFORE reset so it uses the row's font size
       if (rowFontSize) this.generator.setFontSize(rowFontSize);
       this.generator.addNewline();
+      if (extraHeight > 0) this.generator.addSpacing(extraHeight);
       this.generator.resetFormatting();
     } else if (columns.length >= 2) {
       // For non-space-between layouts, distribute evenly across the content width
       const colWidth = contentWidth / columns.length;
+      let extraHeight = 0;
 
       for (let i = 0; i < columns.length; i++) {
         const col = columns[i];
@@ -455,13 +549,26 @@ export class PDFTraverser {
 
         // Calculate X position for this column
         const colX = i * colWidth;
-        this.generator.addTextAtX(col.content, colX);
+        const isLast = i === columns.length - 1;
+        const usableWidth = isLast
+          ? Math.max(contentWidth - colX, 1)
+          : Math.max(colWidth - COLUMN_GUTTER, 1);
+        const lines = this.generator.addTextBlockAtX(
+          col.content,
+          colX,
+          usableWidth
+        );
+        extraHeight = Math.max(
+          extraHeight,
+          (lines - 1) * this.generator.getLineAdvance()
+        );
 
         if (col.bold) this.generator.setBold(false);
       }
       // Add newline BEFORE reset so it uses the row's font size
       if (rowFontSize) this.generator.setFontSize(rowFontSize);
       this.generator.addNewline();
+      if (extraHeight > 0) this.generator.addSpacing(extraHeight);
       this.generator.resetFormatting();
     } else {
       // Single column fallback
@@ -475,6 +582,30 @@ export class PDFTraverser {
       this.generator.addNewline();
       this.generator.resetFormatting();
     }
+  }
+
+  /**
+   * Natural (unwrapped) width of every column, measured with its own font.
+   *
+   * Font sizes deliberately leak FORWARD inside the loop (a column without
+   * its own fontSize measures at the previous column's size) because the
+   * render loops below apply fonts the same way — measurement must mirror
+   * rendering. The ambient size is restored at the END so the render loop
+   * starts from the same font state it would have had without a measurement
+   * pass; otherwise the FIRST column, when it has no fontSize of its own,
+   * would render at the LAST measured column's size.
+   */
+  private measureColumns(columns: RowColumn[]): number[] {
+    const ambientFontSize = this.generator.getCurrentFontSize();
+    const widths = columns.map((col) => {
+      if (col.fontSize) this.generator.setFontSize(col.fontSize);
+      if (col.bold) this.generator.setBold(true);
+      const width = this.generator.getTextWidth(col.content);
+      if (col.bold) this.generator.setBold(false);
+      return width;
+    });
+    this.generator.setFontSizePoints(ambientFontSize);
+    return widths;
   }
 
   /**

@@ -1,6 +1,6 @@
 {
   "name": "@thermal-print/pdf",
-  "version": "0.4.1-beta.6",
+  "version": "0.4.1-beta.7",
   "type": "module",
   "description": "PDF generation for thermal printers - vector and raster modes",
   "main": "dist/index.js",
@@ -15,7 +15,8 @@
   },
   "scripts": {
     "build": "tsc --build",
-    "build:watch": "tsc --build --watch"
+    "build:watch": "tsc --build --watch",
+    "test": "tsx --test test/*.test.ts"
   },
   "keywords": [
     "thermal-printer",
@@ -34,7 +35,8 @@
     "jspdf": "2.5.2"
   },
   "devDependencies": {
-    "typescript": "5.0.0"
+    "typescript": "5.0.0",
+    "tsx": "4.20.6"
   },
   "publishConfig": {
     "access": "public"
