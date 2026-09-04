@@ -15,7 +15,8 @@
   },
   "scripts": {
     "build": "tsc --build",
-    "build:watch": "tsc --build --watch"
+    "build:watch": "tsc --build --watch",
+    "test": "tsx --test test/*.test.ts"
   },
   "keywords": [
     "thermal-printer",
