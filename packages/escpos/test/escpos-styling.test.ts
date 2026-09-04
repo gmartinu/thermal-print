@@ -115,6 +115,19 @@ describe("style helpers", () => {
     assert.deepEqual(distributeColumnWidths(["50%", "20%", "30%"], 42), [21, 8, 13]);
   });
 
+  it("splits a row evenly when the declared widths do not fit the paper", () => {
+    // A "100%" cell with a second cell beside it used to leave that cell at
+    // width 0; its capacity floored at one character and a product name printed
+    // one letter per line — metres of paper for a single row.
+    assert.deepEqual(distributeColumnWidths(["100%", undefined], 42), [21, 21]);
+    // Two "80%" cells asked for 68 columns of a 42-column line
+    assert.deepEqual(distributeColumnWidths(["80%", "80%"], 42), [21, 21]);
+    // Two "50%" cells of an ODD line round up to 20 + 20 on 39 columns
+    assert.deepEqual(distributeColumnWidths(["50%", "50%"], 39), [20, 19]);
+    // ...but a row that does fit keeps exactly the widths it declared
+    assert.deepEqual(distributeColumnWidths(["50%", "50%"], 42), [21, 21]);
+  });
+
   it("keeps at least one space in every gap of a space-between row", () => {
     assert.deepEqual(distributeGaps(3, 42, 2), [20, 19]);
     assert.deepEqual(distributeGaps(10, 20, 1), [10]);
@@ -203,6 +216,24 @@ describe("layout fixes (both style modes)", () => {
     assert.equal(lines[0].trimEnd(), "Refrigerante lata                     9,90");
     assert.equal(lines[1].trim(), "zero acucar 350ml");
     assert.ok(lines[0].endsWith("9,90"), "the value stays anchored to the right column");
+  });
+
+  it("never lets a row that over-declares its widths eat the paper", async () => {
+    const tree = doc([
+      page({}, [
+        view({ flexDirection: "row" }, [
+          view({ width: "100%" }, [text({}, "PRIMEIRA COLUNA")]),
+          view({}, [text({}, "Refrigerante lata zero acucar 350ml garrafa")]),
+        ]),
+      ]),
+    ]);
+
+    const lines = (await printedLines(tree)).filter((line) => line.trim().length > 0);
+    // 42 characters wrapped into a 21-column cell: three lines, not thirty-eight
+    assert.equal(lines.length, 3);
+    for (const line of lines) assert.equal(line.length, 42);
+    assert.ok(lines[0].startsWith("PRIMEIRA COLUNA"));
+    assert.equal(lines.map((line) => line.slice(21).trim()).join(" "), "Refrigerante lata zero acucar 350ml garrafa");
   });
 
   it("caps an image at the width its parent View allows and centers it", async () => {
@@ -314,6 +345,29 @@ describe("styleMode: rico — spacing", () => {
     assert.equal(lines[0], "   " + "z".repeat(36));
     assert.equal(lines[1], "   " + "z".repeat(24));
     assert.equal(lines[2].length, 39, "the divider spans the padded line, not the paper");
+  });
+
+  it("centers a line inside the padded box, not inside the paper", async () => {
+    // ESC a 1 centers the bytes it receives, counting the indent we prepend, so
+    // an indent-only line lands half the padding to the right of its box. The
+    // right inset has to go out with it.
+    const tree = doc([
+      page({}, [
+        view({ paddingLeft: 27, paddingRight: 27, alignItems: "center" }, [text({}, "CENTRO")]),
+      ]),
+    ]);
+    const [line] = await printedLines(tree, RICO);
+    assert.equal(line, "     CENTRO     ", "expected the same inset on both sides");
+
+    // A right-aligned line stops at the box edge instead of the paper edge, and
+    // takes no left indent — the printer already pushes it right.
+    const right = doc([
+      page({}, [
+        view({ paddingLeft: 27, paddingRight: 27 }, [text({ textAlign: "right" }, "FIM")]),
+      ]),
+    ]);
+    const [rightLine] = await printedLines(right, RICO);
+    assert.equal(rightLine, "FIM     ");
   });
 
   it("applies Page padding as the receipt margin", async () => {

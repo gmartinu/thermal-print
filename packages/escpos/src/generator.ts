@@ -247,10 +247,44 @@ export class ESCPOSGenerator {
     );
   }
 
-  /** The indent, in characters of the CURRENT font level. */
+  /** A reserved width in Font A columns, in characters of the CURRENT level. */
+  private paddingChars(reserved: number): number {
+    if (reserved <= 0) return 0;
+    return Math.round(reserved / FONT_LEVEL_COLUMN_UNITS[this.currentLevel]);
+  }
+
+  /**
+   * The indent for a line that is starting, in characters of the CURRENT level.
+   * A right-aligned line hangs off the right edge, so its left inset is the
+   * printer's business and spaces on the left would only push it further in.
+   */
   private indentChars(): number {
-    if (this.reservedLeft <= 0) return 0;
-    return Math.round(this.reservedLeft / FONT_LEVEL_COLUMN_UNITS[this.currentLevel]);
+    if (this.context.currentAlign === "right") return 0;
+    return this.paddingChars(this.reservedLeft);
+  }
+
+  /**
+   * Close a printed line by padding it out to the right inset.
+   *
+   * ESC a centres or right-aligns whatever bytes reach it, counting the spaces
+   * we prepended: a centred line carrying only the left indent lands half that
+   * indent to the right of the box it belongs to. Padding the right side as
+   * well makes the printer align the text inside the padded box instead of
+   * inside the paper. Left-aligned lines need nothing — they already start at
+   * the indent.
+   */
+  endTextLine(): void {
+    if (this.atLineStart || this.context.currentAlign === "left") return;
+    const right = this.paddingChars(this.reservedRight);
+    if (right > 0) {
+      this.buffer.pushArray(encodeText(" ".repeat(right)));
+    }
+  }
+
+  /** Print a COMPLETE line: the left indent, the text, and the right inset. */
+  addTextLine(text: string): void {
+    this.addText(text);
+    this.endTextLine();
   }
 
   /**
@@ -639,9 +673,10 @@ export class ESCPOSGenerator {
   getBuffer(): Buffer {
     const buffer = this.buffer.toBuffer();
 
-    // Remove leading line feeds (0x0A) so a receipt never starts with blank
-    // paper. Note this also swallows a marginTop on the very first View in
-    // "rico" mode — deliberate, and covered by a test.
+    // Defensive: drop leading line feeds so a receipt could never start with
+    // blank paper. The buffer opens with the adapter's init command, so in
+    // practice nothing is ever stripped here — in particular a marginTop on the
+    // first View survives, which the "rico" spacing tests rely on.
     let start = 0;
     while (start < buffer.length && buffer[start] === 0x0a) {
       start++;

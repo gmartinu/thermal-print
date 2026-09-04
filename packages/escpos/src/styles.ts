@@ -262,21 +262,45 @@ export function distributeColumnWidths(
   widths: (string | number | undefined)[],
   totalWidth: number
 ): number[] {
+  if (widths.length === 0) return [];
+
   const resolved: (number | undefined)[] = widths.map((width) =>
-    width === undefined ? undefined : parseWidth(width, totalWidth)
+    width === undefined ? undefined : Math.max(0, parseWidth(width, totalWidth))
   );
 
   const explicitTotal = resolved.reduce<number>((sum, width) => sum + (width ?? 0), 0);
   const autoColumns = resolved.filter((width) => width === undefined).length;
 
+  // A row whose declared widths do not fit the paper — three cells of "50%", or
+  // a `width: "100%"` cell with a second cell beside it — cannot be honoured.
+  // Splitting it evenly is the only bounded answer: keeping the declared widths
+  // leaves the leftover columns at zero, their capacity floors at one character,
+  // and a product name then prints one letter per line, metres of paper for one
+  // row. Every column also needs at least one character, hence the +autoColumns.
+  if (explicitTotal + autoColumns > totalWidth) {
+    return evenColumnWidths(resolved.length, totalWidth);
+  }
+
   if (autoColumns === 0) return resolved as number[];
 
-  const remaining = Math.max(0, totalWidth - explicitTotal);
+  const remaining = Math.max(autoColumns, totalWidth - explicitTotal);
   const share = Math.floor(remaining / autoColumns);
   let leftover = remaining - share * autoColumns;
 
   return resolved.map((width) => {
     if (width !== undefined) return width;
+    const extra = leftover > 0 ? 1 : 0;
+    leftover -= extra;
+    return share + extra;
+  });
+}
+
+/** Splits a row width evenly, giving the remainder to the leftmost columns. */
+function evenColumnWidths(columns: number, totalWidth: number): number[] {
+  const share = Math.max(1, Math.floor(totalWidth / columns));
+  let leftover = Math.max(0, totalWidth - share * columns);
+
+  return Array.from({ length: columns }, () => {
     const extra = leftover > 0 ? 1 : 0;
     leftover -= extra;
     return share + extra;

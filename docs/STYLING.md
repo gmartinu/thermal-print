@@ -244,6 +244,13 @@ View also caps the width of an Image drawn inside it.
 | `25` | Absolute character count | `width: 25` → 25 chars |
 | `undefined` | Auto-calculated | The width left over by the sibling columns, split evenly |
 
+A row can declare more than the line holds — three cells of `'50%'`, or a
+`width: '100%'` cell with a sibling. There is no honest way to honour that, so
+`distributeColumnWidths` falls back to an **even split across every column**.
+Leaving the declared widths in place would give the leftover columns zero
+characters, and a zero-width column wraps its text one letter per line: metres
+of paper for a single row.
+
 **Example: Table Layout**
 ```typescript
 <View style={{ flexDirection: 'row' }}>
@@ -459,9 +466,9 @@ View also caps the width of an Image drawn inside it.
 |-------|-------|-----|
 | Text not centered | `textAlign` on View instead of Text | Move `textAlign: 'center'` to `<Text>` element |
 | Row not centered | Using `alignItems` instead of `justifyContent` | Use `justifyContent: 'center'` on row View |
-| Padding not working | Using left/right padding | Only top/bottom padding supported |
-| Columns overlapping | Total width > paper width | Reduce column widths or use percentages |
-| Text cut off | Content longer than column width | Text is truncated (no wrapping in row layouts) |
+| Padding not working | Left/right padding in the default `legacy` mode | Pass `styleMode: 'rico'` — horizontal padding is honoured only there |
+| Row split evenly, ignoring the widths | Declared widths add up to more than the line | Make them add up to 100% (or to the character count of the paper) |
+| Product name broken across lines | Content longer than its column | Expected: a cell wraps onto the next line of the row instead of being cut |
 
 ---
 

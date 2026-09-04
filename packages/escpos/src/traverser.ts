@@ -305,14 +305,14 @@ export class TreeTraverser {
         for (let i = 1; i < parts.length; i++) {
           rowText += " ".repeat(gaps[i - 1]) + parts[i];
         }
-        this.generator.addText(rowText);
+        this.generator.addTextLine(rowText);
       } else {
         const parts = columnLines.map((lines) => lines[lineIdx] || "");
         const spacingBetweenColumns = Math.max(0, parts.length - 1);
         const totalContentWidth =
           parts.reduce((sum, part) => sum + part.length, 0) + spacingBetweenColumns;
         const leadingSpaces = Math.max(0, Math.floor((paperWidth - totalContentWidth) / 2));
-        this.generator.addText(" ".repeat(leadingSpaces) + parts.join(" "));
+        this.generator.addTextLine(" ".repeat(leadingSpaces) + parts.join(" "));
       }
 
       this.generator.addNewline();
@@ -347,7 +347,7 @@ export class TreeTraverser {
       for (let i = 0; i < cells.length; i++) {
         rowText += alignTextInColumn(columnLines[i][lineIdx] || "", capacities[i], cells[i].align);
       }
-      this.generator.addText(rowText);
+      this.generator.addTextLine(rowText);
       return;
     }
 
@@ -357,7 +357,10 @@ export class TreeTraverser {
         alignTextInColumn(columnLines[i][lineIdx] || "", capacities[i], cells[i].align)
       );
     }
+    // Back to the row font BEFORE closing the line, so the right inset is
+    // measured in the same characters the row was laid out in.
     this.generator.setPrintState(style.rowLevel, style.rowBold);
+    this.generator.endTextLine();
   }
 
   /**
@@ -443,7 +446,7 @@ export class TreeTraverser {
       const paperWidth = this.generator.getPaperWidth();
       const lines = wrapText(fullText, paperWidth);
       for (let i = 0; i < lines.length; i++) {
-        this.generator.addText(lines[i]);
+        this.generator.addTextLine(lines[i]);
         if (i < lines.length - 1) {
           this.generator.addNewline();
         }
