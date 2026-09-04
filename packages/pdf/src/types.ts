@@ -103,6 +103,16 @@ export interface PDFResult {
  */
 export interface VectorPDFOptions {
   /**
+   * Log the page geometry and the measurement pass to the console.
+   *
+   * These lines used to be printed on every render, so the PDV console got
+   * nine of them per receipt; they are diagnostics, not output.
+   *
+   * @default false
+   */
+  debug?: boolean;
+
+  /**
    * Paper width in points (overrides Page component's size.width)
    * @default Read from Page component, or 205pt (≈72mm)
    */

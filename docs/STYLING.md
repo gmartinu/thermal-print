@@ -6,16 +6,34 @@ This document provides a comprehensive reference of all CSS-like style propertie
 
 react-escpos converts React styles to ESC/POS printer commands. Due to thermal printer hardware constraints, only a subset of CSS properties are supported. This document clarifies what works, what doesn't, and why.
 
+## Style Modes
+
+Since DEV-2390 the ESC/POS renderer has two style modes, chosen with the
+`styleMode` option of `printNodesToESCPOS()`:
+
+| Mode | Meaning |
+|------|---------|
+| `'legacy'` (default) | Exactly the bytes shipped before DEV-2390. `fontSize`, vertical `margin`/`padding`, horizontal padding and Page margins are ignored. |
+| `'rico'` | All of the above are honoured, bringing the output close to what `@thermal-print/pdf` draws from the same tree. |
+
+Layout **bugs** (see the tables below) are fixed in both modes. The promise that
+`legacy` never moves a byte is enforced by the goldens in
+`packages/escpos/test/goldens/legacy-*.snap`.
+
 ## Paper Width Configuration
 
-Default: **48 characters** (80mm thermal printers)
+Default: **42 characters** — Font A on an 80mm printer, measured on a Bematech
+MP-4200 TH. Fonts do not divide the paper into the same number of columns, so
+the width is calibrated per font, not derived from a formula:
 
-Common configurations:
-- **58mm paper** = 32 characters
-- **80mm paper** = 48 characters (default)
-- **112mm paper** = 64 characters
+| Paper / font | Columns |
+|--------------|---------|
+| 58mm | 32 |
+| 80mm, Font A (`fontMode: 'medium'`, default) | 42 |
+| 80mm, Font B (`fontMode: 'small'`) | 56 |
 
-Configure via `convertToESCPOS()` options.
+Pass the measured value as `paperWidth`; the renderer derives the width of the
+other font levels from it and never hardcodes a column count.
 
 ---
 
@@ -25,21 +43,35 @@ Configure via `convertToESCPOS()` options.
 
 | Property | Type | ESC/POS Command | Implementation | Limitations |
 |----------|------|-----------------|----------------|-------------|
-| `fontSize` | `number` | ESC ! (0x1B 0x21) | 4 discrete sizes based on pixel ranges | Max 2x2 character size |
+| `fontSize` | `number` | ESC ! (0x1B 0x21) | 3 levels, relative to `fontMode` | `styleMode: 'rico'` only; max 2x2 |
 | `fontWeight` | `string \| number` | ESC ! (0x1B 0x21) | Bold emphasis bit in ESC ! command | Only bold/normal (no medium, light, etc.) |
 | `fontFamily` | `string` | N/A | Only used for bold detection (`'Helvetica-Bold'`) | Cannot change physical font |
 | `textAlign` | `'left' \| 'center' \| 'right'` | ESC a n (0x1B 0x61 n) | Sets printer alignment mode | Applied globally per line |
 
 #### `fontSize` Size Mapping
 
-Implemented in `src/styles.ts:73-87`, applied in `src/generator.ts:322`
+Implemented in `packages/escpos/src/styles.ts` (`fontSizeLevelDelta`,
+`resolveFontLevel`, `columnsForLevel`); honoured only with `styleMode: 'rico'`.
 
-| Pixel Range | Output Size | ESC ! Value | Description |
-|-------------|-------------|-------------|-------------|
-| 8-12px | 1x1 | 0x00 | Normal width, normal height |
-| 13-18px | 1x2 | 0x10 | Normal width, double height |
-| 19-24px | 2x1 | 0x20 | Double width, normal height |
-| 25+px | 2x2 | 0x30 | Double width, double height (MAX) |
+There are three levels, and `fontSize` picks one **relative to the document's
+own base level**, which `fontMode` sets:
+
+| Level | ESC ! | Columns on 80mm |
+|-------|-------|-----------------|
+| Font B 1x1 | `0x01` | 56 |
+| Font A 1x1 | `0x00` | 42 |
+| Font A 2x2 | `0x30` | 21 |
+
+| `fontSize` | Step |
+|------------|------|
+| <= 10 | one level down |
+| 11-19 | the document's own level |
+| >= 20 | one level up |
+
+So `fontSize: 24` in a `fontMode: 'medium'` document reaches Font A 2x2, and in
+a `fontMode: 'small'` one it reaches Font A 1x1 — never two steps. A 2x2 line
+that would not fit the paper (16 columns on 58mm) falls back one level instead
+of wrapping.
 
 **Note:** Uses ESC ! instead of GS ! for better compatibility with printers like Bematech MP-4200 TH.
 
@@ -89,7 +121,7 @@ Implemented in `src/traverser.ts:113-201`
 
 | Value | Behavior | Requirements | Use Case |
 |-------|----------|--------------|----------|
-| `'space-between'` | Two columns with maximized gap | 2 children, no explicit widths | Payment summaries (label: price) |
+| `'space-between'` | Columns spread to the edges, free space split evenly between them | 2+ children, no explicit widths | Payment summaries (label: price) |
 | `'center'` | Center entire row on paper | No explicit widths | Centered buttons, badges |
 | `'flex-start'` | **Default behavior** (left-aligned) | N/A | Standard table layout |
 | `'flex-end'` | ❌ **NOT SUPPORTED** | N/A | Would need trailing spaces implementation |
@@ -115,9 +147,11 @@ Implemented in `src/traverser.ts:113-201`
 
 #### `alignItems` Limitations
 
-Implemented in `src/traverser.ts:150-154`
+Implemented in `packages/escpos/src/traverser.ts` (`alignmentContext`).
 
-**Only used as text alignment fallback** when child Text nodes don't specify `textAlign`.
+**Only used as text alignment fallback** when child Text nodes don't specify
+`textAlign` — but it now reaches every descendant Text and Image, not just the
+direct children of a row. Applies in both style modes.
 
 Does NOT control:
 - Vertical centering (no concept in line-by-line thermal printing)
@@ -129,20 +163,31 @@ Does NOT control:
 
 | Property | Supported | Conversion | Implementation | Limitations |
 |----------|-----------|------------|----------------|-------------|
-| `padding` | Top/Bottom only | ~20px = 1 line feed | `src/generator.ts:329-343` | Left/right padding not supported |
-| `paddingTop` | ✅ Yes | ~20px = 1 line feed | Via ESC 3 n line spacing | Approximate conversion |
-| `paddingBottom` | ✅ Yes | ~20px = 1 line feed | Via ESC 3 n line spacing | Approximate conversion |
-| `paddingLeft` | ❌ No | N/A | Extracted but ignored | No horizontal margin on thermal printers |
-| `paddingRight` | ❌ No | N/A | Extracted but ignored | No horizontal margin on thermal printers |
-| `margin` | Top/Bottom only | ~20px = 1 line feed | Same as padding | Left/right margin not supported |
-| `marginTop` | ✅ Yes | ~20px = 1 line feed | Via line feeds | Approximate conversion |
-| `marginBottom` | ✅ Yes | ~20px = 1 line feed | Via line feeds | Approximate conversion |
-| `marginLeft` | ❌ No | N/A | Extracted but ignored | No horizontal margin on thermal printers |
-| `marginRight` | ❌ No | N/A | Extracted but ignored | No horizontal margin on thermal printers |
+All of these need `styleMode: 'rico'`; in `legacy` they are extracted and ignored.
 
-**Conversion Formula:** `src/styles.ts:105`
+| Property | Supported | Conversion | Implementation | Limitations |
+|----------|-----------|------------|----------------|-------------|
+| `padding` | ✅ All four sides | 12pt = 1 line, 5.4pt = 1 column | `generator.applyViewSpacing` / `pushHorizontalPadding` | `rico` only |
+| `paddingTop` | ✅ Yes | 12pt = 1 line feed | Line feeds, before the content | `rico` only |
+| `paddingBottom` | ✅ Yes | 12pt = 1 line feed | Line feeds, before the bottom border | `rico` only |
+| `paddingLeft` | ✅ Yes | 5.4pt = 1 column | Indents every line inside the element | `rico` only |
+| `paddingRight` | ✅ Yes | 5.4pt = 1 column | Shrinks the usable width | `rico` only |
+| `margin` | Top/Bottom only | 12pt = 1 line feed | Same as padding | Left/right margin not supported |
+| `marginTop` | ✅ Yes | 12pt = 1 line feed | Via line feeds | `rico` only |
+| `marginBottom` | ✅ Yes | 12pt = 1 line feed | Via line feeds | `rico` only |
+| `marginLeft` | ❌ No | N/A | Extracted but ignored | Use `paddingLeft` on the parent View |
+| `marginRight` | ❌ No | N/A | Extracted but ignored | Use `paddingRight` on the parent View |
+
+**Conversion Formula:** `packages/escpos/src/styles.ts` (`calculateSpacing`,
+`calculateHorizontalSpacing`). The constants are the PDF renderer's own
+geometry — a 10pt body line is 12pt tall at the default 1.2 line height, and an
+80mm page is 226pt wide for 42 Font A columns — which is why the same value
+produces the same gap in the preview and on paper. Vertical spacing is capped at
+6 lines so a stray `marginTop: 400` cannot eject a page of paper.
+
 ```typescript
-lines = Math.round(pixels / 20)
+lines = Math.min(6, Math.round(points / 12))
+columns = Math.round(points / (226 / 42))
 ```
 
 ---
@@ -189,13 +234,22 @@ Implemented in `src/styles.ts:111-121`, applied in `src/generator.ts:334-341`
 
 #### `width` Parsing
 
-Implemented in `src/styles.ts:134-147`, used in `src/traverser.ts:135`
+Implemented in `packages/escpos/src/styles.ts` (`parseWidth`,
+`distributeColumnWidths`), used in `traverser.handleRowLayout`. A `width` on a
+View also caps the width of an Image drawn inside it.
 
 | Input Format | Parsing | Example |
 |--------------|---------|---------|
-| `'50%'` | Percentage of paper width | `width: '50%'` → 24 chars (on 48-char paper) |
+| `'50%'` | Percentage of paper width | `width: '50%'` → 21 chars (on 42-char paper) |
 | `25` | Absolute character count | `width: 25` → 25 chars |
-| `undefined` | Auto-calculated | Equal distribution among columns |
+| `undefined` | Auto-calculated | The width left over by the sibling columns, split evenly |
+
+A row can declare more than the line holds — three cells of `'50%'`, or a
+`width: '100%'` cell with a sibling. There is no honest way to honour that, so
+`distributeColumnWidths` falls back to an **even split across every column**.
+Leaving the declared widths in place would give the leftover columns zero
+characters, and a zero-width column wraps its text one letter per line: metres
+of paper for a single row.
 
 **Example: Table Layout**
 ```typescript
@@ -272,14 +326,16 @@ Implemented in `src/styles.ts:134-147`, used in `src/traverser.ts:135`
 3. **Monochrome output**: Black ink on white paper only (no colors, no backgrounds).
 4. **Fixed character width**: Each character occupies 1 cell (or multiples with size modifiers).
 5. **No vertical centering**: Content flows top-down only. `alignItems: 'center'` has no vertical meaning.
-6. **Horizontal margins impossible**: Printers can only align (left/center/right) or add leading spaces in content.
+6. **Horizontal margins are leading spaces**: the printer only aligns
+   (left/center/right); `paddingLeft`/`paddingRight` are implemented by
+   indenting the line and shrinking the usable width, in `styleMode: 'rico'`.
 
 ### Common Misconceptions
 
 | Expectation | Reality | Alternative |
 |-------------|---------|-------------|
 | "I want this div centered vertically" | No vertical centering exists | Add `paddingTop` to push content down |
-| "I want 20px left margin" | No left margin support | Add leading spaces to text content |
+| "I want a 16pt left margin" | `marginLeft` is ignored | Use `paddingLeft` on the parent View with `styleMode: 'rico'` |
 | "I want red text" | Monochrome printers only | Use bold for emphasis |
 | "I want rounded corners on this box" | Character-based rendering | Use border characters creatively |
 | "I want this text rotated 90°" | No rotation support | Some printers support 90° via vendor-specific commands (not in ESC/POS standard) |
@@ -354,17 +410,17 @@ Implemented in `src/styles.ts:134-147`, used in `src/traverser.ts:135`
 **CSS:**
 ```css
 .section {
-  padding-top: 20px;
-  padding-bottom: 40px;
+  padding-top: 12pt;
+  padding-bottom: 24pt;
 }
 ```
 
 **react-escpos:**
 ```typescript
-<View style={{ paddingTop: 20, paddingBottom: 40 }}>
+<View style={{ paddingTop: 12, paddingBottom: 24 }}>
   {/* Content */}
 </View>
-// Converts to ~1 line feed top, ~2 line feeds bottom
+// styleMode: 'rico' → 1 line feed top, 2 line feeds bottom (12pt per line)
 ```
 
 #### Table Layout
@@ -410,9 +466,9 @@ Implemented in `src/styles.ts:134-147`, used in `src/traverser.ts:135`
 |-------|-------|-----|
 | Text not centered | `textAlign` on View instead of Text | Move `textAlign: 'center'` to `<Text>` element |
 | Row not centered | Using `alignItems` instead of `justifyContent` | Use `justifyContent: 'center'` on row View |
-| Padding not working | Using left/right padding | Only top/bottom padding supported |
-| Columns overlapping | Total width > paper width | Reduce column widths or use percentages |
-| Text cut off | Content longer than column width | Text is truncated (no wrapping in row layouts) |
+| Padding not working | Left/right padding in the default `legacy` mode | Pass `styleMode: 'rico'` — horizontal padding is honoured only there |
+| Row split evenly, ignoring the widths | Declared widths add up to more than the line | Make them add up to 100% (or to the character count of the paper) |
+| Product name broken across lines | Content longer than its column | Expected: a cell wraps onto the next line of the row instead of being cut |
 
 ---
 

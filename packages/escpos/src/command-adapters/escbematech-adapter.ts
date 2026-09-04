@@ -58,8 +58,18 @@ export class ESCBematechCommandAdapter implements CommandAdapter {
       emphasized: bold,
       doubleHeight: height >= 2,
       doubleWidth: width >= 2,
-      underline: false
+      underline: false,
+      useFontB
     });
+  }
+
+  /**
+   * Before DEV-2390 this adapter hardcoded Font B, ignoring the font argument.
+   * Legacy output keeps that, so the Bematech printers in the field do not
+   * change character size overnight; `styleMode: "rico"` follows fontMode.
+   */
+  getLegacyDefaultFont(): 0 | 1 {
+    return 1;
   }
 
   getLineSpacingCommand(dots?: number): number[] {

@@ -11,7 +11,7 @@
     "build:pdf": "pnpm --filter @thermal-print/pdf run build",
     "clean": "pnpm --filter ./packages/* exec rm -rf dist *.tsbuildinfo",
     "dev": "pnpm --filter ./packages/* run build:watch",
-    "test": "pnpm --filter @thermal-print/pdf run test",
+    "test": "pnpm --filter @thermal-print/escpos --filter @thermal-print/pdf run test",
     "playground": "pnpm --filter @thermal-print/playground run dev",
     "playground:build": "pnpm --filter @thermal-print/playground run build",
     "docs": "pnpm --filter @thermal-print/docs run dev",

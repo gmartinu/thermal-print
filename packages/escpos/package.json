@@ -1,6 +1,6 @@
 {
   "name": "@thermal-print/escpos",
-  "version": "0.3.1-beta.6",
+  "version": "0.3.1-beta.7",
   "type": "module",
   "description": "ESC/POS command generation and thermal printer control",
   "main": "dist/index.js",
@@ -15,7 +15,9 @@
   },
   "scripts": {
     "build": "tsc --build",
-    "build:watch": "tsc --build --watch"
+    "build:watch": "tsc --build --watch",
+    "test": "tsx --test test/*.test.ts",
+    "typecheck": "tsc -p tsconfig.test.json"
   },
   "keywords": [
     "thermal-printer",

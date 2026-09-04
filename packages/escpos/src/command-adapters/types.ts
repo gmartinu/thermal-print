@@ -87,4 +87,17 @@ export interface CommandAdapter {
    * @param lines - Number of lines to feed
    */
   getFeedLinesCommand(lines: number): number[];
+
+  /**
+   * The font this adapter printed with before DEV-2390, when the font was
+   * hardcoded instead of following fontMode.
+   *
+   * Only consulted in `styleMode: "legacy"`, so an adapter that used to ignore
+   * the font argument keeps producing the same bytes on the printers already
+   * in the field. In `styleMode: "rico"` the font always follows fontMode.
+   *
+   * @returns 0 = Font A, 1 = Font B. Omit when the adapter always honoured the
+   *   requested font.
+   */
+  getLegacyDefaultFont?(): 0 | 1;
 }

@@ -21,7 +21,10 @@ npm run build:watch
 npm run prepublishOnly
 ```
 
-**Note**: There are no tests configured yet (`npm test` will fail). The library is tested through manual integration testing with thermal printers.
+**Tests**: `pnpm test` runs the ESC/POS and PDF suites (`node:test` via `tsx`).
+`pnpm --filter @thermal-print/escpos typecheck` type checks the tests too.
+Real-printer behaviour is still verified by hand, but the byte-level contract is
+not: see the goldens below.
 
 ## Publishing Commands
 
@@ -128,13 +131,20 @@ Converts React/CSS-like styles to ESC/POS commands:
    - Limited to 2x2 maximum character size (1x1, 1x2, 2x1, 2x2)
    - Combines size and bold/emphasis in a single command
    - Avoids text rendering issues on printers like Bematech MP-4200 TH
-   - **Uses Font B (bit 0 = 1) by default** - Narrower font (9×17 dots) fits more characters per line
-   - Font B prevents line wrapping on 48-character receipts (80mm thermal printers)
+   - The font follows `fontMode`: `'medium'` (default) is Font A (12×24),
+     `'small'` is Font B (9×17). With `styleMode: 'rico'` a `fontSize` moves one
+     level from there — see [docs/STYLING.md](docs/STYLING.md)
 3. **CP860 Encoding**: Default encoding supports Brazilian Portuguese characters (ç, á, é, etc.)
-4. **Paper Width**: Default 48 characters (80mm thermal printers). Common values:
+4. **Paper Width**: measured per font, never derived. Default 42 (Font A, 80mm):
    - 58mm = 32 chars
-   - 80mm = 48 chars (default)
-   - 112mm = 64 chars
+   - 80mm Font A (`fontMode: 'medium'`, default) = 42 chars
+   - 80mm Font B (`fontMode: 'small'`) = 56 chars
+   The caller passes the calibrated number; the renderer derives the other font
+   levels from it. Never hardcode a column count in the renderer.
+5. **Style modes**: every change to how a style is rendered goes behind
+   `styleMode: 'rico'`; `'legacy'` must stay byte-identical. Enforced by
+   `packages/escpos/test/goldens/legacy-*.snap` — a diff there is a leak, never
+   a golden to regenerate. See [docs/STYLING.md](docs/STYLING.md).
 
 ## TypeScript Configuration
 
@@ -169,9 +179,10 @@ The library uses **CP860** (Code Page 860) by default for Brazilian Portuguese s
 
 ### Testing with Real Printers
 
-No automated tests exist. Manual testing workflow:
+Automated coverage lives in `packages/escpos/test` and `packages/pdf/test`.
+Manual testing workflow on top of it:
 
-1. Run `npm run build`
+1. Run `pnpm build`
 2. Create test script importing from `dist/`
 3. Generate ESC/POS buffer with `convertToESCPOS()`
 4. Write buffer to file: `fs.writeFileSync('receipt.bin', buffer)`
@@ -179,24 +190,26 @@ No automated tests exist. Manual testing workflow:
 
 ## File Organization
 
+This is a pnpm workspace; the paths above are relative to each package.
+
 ```
-src/
-├── index.ts              # Main API: convertToESCPOS()
-├── generator.ts          # ESC/POS command generator (low-level)
-├── traverser.ts          # Tree traversal and layout logic
-├── renderer.ts           # React component → ElementNode tree
-├── types.ts              # TypeScript type definitions
-├── styles.ts             # Style extraction and mapping
-├── adapters/             # Component normalization system
-│   ├── index.ts
-│   ├── types.ts
-│   ├── base-adapter.ts
-│   ├── react-pdf-adapter.ts
-│   └── custom-adapter.ts
-├── commands/
-│   └── escpos.ts         # Raw ESC/POS byte sequences
-└── encodings/
-    └── cp860.ts          # CP860 character encoding
+packages/
+├── core/src/             # PrintNode IR and the shared style types
+├── escpos/
+│   ├── src/
+│   │   ├── converter.ts          # Main API: printNodesToESCPOS()
+│   │   ├── generator.ts          # ESC/POS command generator (low-level)
+│   │   ├── traverser.ts          # Tree traversal and layout logic
+│   │   ├── styles.ts             # Style extraction, font levels, spacing
+│   │   ├── types.ts              # ConversionContext
+│   │   ├── command-adapters/     # ESC/POS vs ESC/Bematech protocols
+│   │   ├── commands/             # Raw byte sequences per protocol
+│   │   └── encodings/cp860.ts    # CP860 character encoding
+│   └── test/                     # node:test suites + byte goldens
+├── react/src/            # React component tree → PrintNode
+├── pdf/src/              # PrintNode → vector PDF
+├── playground/           # Browser playground with the example receipts
+└── docs/                 # VitePress site
 ```
 
 ## Dependencies

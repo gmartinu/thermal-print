@@ -41,15 +41,24 @@ export type StandardElementType = typeof StandardElementType[keyof typeof Standa
  */
 export interface TextStyle {
   /**
-   * Font size in pixels (maps to 4 discrete ESC/POS sizes)
+   * Font size in points, read as a STEP relative to the document body.
    *
-   * Size mapping (ESC ! command):
-   * - 8-12px → 1x1 (normal)
-   * - 13-18px → 1x2 (normal width, double height)
-   * - 19-24px → 2x1 (double width, normal height)
-   * - 25+px → 2x2 (double width, double height - MAX)
+   * PDF uses it as an absolute size. ESC/POS has no continuous font size, so it
+   * maps to one of three visual levels — Font B 1x1, Font A 1x1, Font A 2x2 —
+   * and fontSize picks a level relative to the one `fontMode` set for the whole
+   * document:
+   * - <= 10 → one level down (condensed)
+   * - 11-19 → the document's own level
+   * - >= 20 → one level up (double size, clamped at Font A 2x2)
    *
-   * @example fontSize: 16 // → 1x2 size
+   * So `fontSize: 24` is "bigger than the body of THIS receipt", not "2x2": in
+   * a `fontMode: "small"` document it lands on Font A 1x1. On narrow paper a
+   * 2x2 line that would not fit drops back one level instead of wrapping.
+   *
+   * ⚠️ ESC/POS: honoured only with `styleMode: "rico"`; ignored in the default
+   * `legacy` mode, which prints the whole document at the fontMode size.
+   *
+   * @example fontSize: 24 // one level above the body → the total in evidence
    */
   fontSize?: number;
 
@@ -189,9 +198,10 @@ export interface ViewStyle {
    *
    * ⚠️ WARNING: Only used as text alignment fallback, NOT for vertical positioning.
    *
-   * Behavior:
-   * - 'center' → Sets text alignment to center (if textAlign not specified)
-   * - 'flex-end' → Sets text alignment to right (if textAlign not specified)
+   * Behavior on a column View — inherited by every descendant Text and Image
+   * that does not set its own textAlign:
+   * - 'center' → Sets text alignment to center
+   * - 'flex-end' → Sets text alignment to right
    *
    * Does NOT control:
    * - Vertical centering (no concept in thermal printing)
@@ -202,86 +212,84 @@ export interface ViewStyle {
   alignItems?: string;
 
   /**
-   * Padding (shorthand for top/bottom only)
+   * Padding shorthand (all four sides)
    *
-   * Conversion: ~20 pixels = 1 line feed
+   * Conversion on ESC/POS: 12pt = 1 line feed vertically, 5.4pt = 1 character
+   * column horizontally — the same points the PDF renderer draws with, which is
+   * what makes the two outputs line up.
    *
-   * ⚠️ WARNING: Only affects top and bottom padding.
-   * Left/right padding is NOT supported on thermal printers.
+   * ⚠️ ESC/POS: honoured only with `styleMode: "rico"`.
    *
-   * @example padding: 20 // ~1 line feed top and bottom
+   * @example padding: 12 // 1 line feed above and below, ~2 columns each side
    */
   padding?: number;
 
   /**
    * Top padding (converted to line feeds)
    *
-   * Conversion: ~20 pixels = 1 line feed
+   * Conversion: 12pt = 1 line feed. ESC/POS: `styleMode: "rico"` only.
    *
-   * @example paddingTop: 40 // ~2 line feeds before content
+   * @example paddingTop: 24 // 2 line feeds before content
    */
   paddingTop?: number;
 
   /**
    * Bottom padding (converted to line feeds)
    *
-   * Conversion: ~20 pixels = 1 line feed
+   * Conversion: 12pt = 1 line feed. ESC/POS: `styleMode: "rico"` only.
    *
-   * @example paddingBottom: 20 // ~1 line feed after content
+   * @example paddingBottom: 12 // 1 line feed after content
    */
   paddingBottom?: number;
 
   /**
-   * Left padding (HTML/PDF ONLY)
+   * Left padding
    *
-   * ⚠️ ESC/POS: Completely ignored.
-   * ✅ HTML/PDF: Applied as CSS padding-left.
+   * ✅ PDF: applied as a left inset.
+   * ✅ ESC/POS with `styleMode: "rico"`: indents every line inside the element
+   *    and shrinks the usable width, at ~5.4pt per character column. Ignored in
+   *    the default `legacy` mode.
    *
-   * Use this when generating PDFs to add horizontal spacing.
-   *
-   * @example paddingLeft: 10 // 10px left padding in PDF
+   * @example paddingLeft: 16 // ~3 columns of indent
    */
   paddingLeft?: number;
 
   /**
-   * Right padding (HTML/PDF ONLY)
+   * Right padding
    *
-   * ⚠️ ESC/POS: Completely ignored.
-   * ✅ HTML/PDF: Applied as CSS padding-right.
+   * ✅ PDF: applied as a right inset.
+   * ✅ ESC/POS with `styleMode: "rico"`: shrinks the usable width by ~5.4pt per
+   *    character column. Ignored in the default `legacy` mode.
    *
-   * Use this when generating PDFs to add horizontal spacing.
-   *
-   * @example paddingRight: 10 // 10px right padding in PDF
+   * @example paddingRight: 16 // ~3 columns off the right edge
    */
   paddingRight?: number;
 
   /**
-   * Margin (shorthand for top/bottom only)
+   * Margin shorthand (all four sides)
    *
-   * Conversion: ~20 pixels = 1 line feed
+   * ⚠️ ESC/POS: vertical margins become line feeds with `styleMode: "rico"`;
+   * horizontal margins are still ignored (use padding on the parent View).
    *
-   * ⚠️ WARNING: Only affects top and bottom margin.
-   * Left/right margin is NOT supported on thermal printers.
-   *
-   * @example margin: 20 // ~1 line feed top and bottom
+   * @example margin: 12 // 1 line feed above and below
    */
   margin?: number;
 
   /**
    * Top margin (converted to line feeds)
    *
-   * Conversion: ~20 pixels = 1 line feed
+   * Conversion: 12pt = 1 line feed. ESC/POS: `styleMode: "rico"` only.
    *
-   * @example marginTop: 40 // ~2 line feeds before content
+   * @example marginTop: 24 // 2 line feeds before content
    */
   marginTop?: number;
 
   /**
    * Bottom margin (converted to line feeds)
    *
-   * Conversion: ~20 pixels = 1 line feed
+   * Conversion: 12pt = 1 line feed. ESC/POS: `styleMode: "rico"` only.
    *
-   * @example marginBottom: 20 // ~1 line feed after content
+   * @example marginBottom: 12 // 1 line feed after content
    */
   marginBottom?: number;
 

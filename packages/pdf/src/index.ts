@@ -262,11 +262,15 @@ export async function printNodesToPDF(
     documentNode?.props?.orientation ??
     undefined;
 
-  // Debug: log what we found
-  console.log(`[printNodesToPDF] pageNode:`, pageNode?.type, pageNode?.props);
-  console.log(`[printNodesToPDF] pageSize:`, pageSize);
-  console.log(`[printNodesToPDF] pageWrap:`, pageWrap);
-  console.log(`[printNodesToPDF] orientation:`, orientation ?? 'auto-detect');
+  const debug = options.debug ?? false;
+  const log = (...args: unknown[]) => {
+    if (debug) console.log(...args);
+  };
+
+  log(`[printNodesToPDF] pageNode:`, pageNode?.type, pageNode?.props);
+  log(`[printNodesToPDF] pageSize:`, pageSize);
+  log(`[printNodesToPDF] pageWrap:`, pageWrap);
+  log(`[printNodesToPDF] orientation:`, orientation ?? 'auto-detect');
 
   // Paper dimensions in POINTS (matching react-pdf which uses points directly)
   // No conversion needed - Page.size is already in points
@@ -283,7 +287,7 @@ export async function printNodesToPDF(
       ?? options.paperHeight
       ?? 'auto';
 
-  console.log(`[printNodesToPDF] Calculated dimensions (points):`, { paperWidth, paperHeight });
+  log(`[printNodesToPDF] Calculated dimensions (points):`, { paperWidth, paperHeight });
 
   // Common options for generator
   const generatorOptions = {
@@ -300,7 +304,7 @@ export async function printNodesToPDF(
   if (paperHeight === 'auto') {
     // Two-pass rendering for dynamic height:
     // 1. First pass: measure content height without rendering
-    console.log(`[printNodesToPDF] Dynamic height: starting measurement pass`);
+    log(`[printNodesToPDF] Dynamic height: starting measurement pass`);
 
     const measureGenerator = PDFGenerator.createForMeasurement({
       paperWidth,
@@ -312,20 +316,20 @@ export async function printNodesToPDF(
     await measureTraverser.traverse(printNode);
 
     const measuredHeight = measureGenerator.getContentHeight();
-    console.log(`[printNodesToPDF] Measurement complete: content height = ${measuredHeight}pt`);
+    log(`[printNodesToPDF] Measurement complete: content height = ${measuredHeight}pt`);
 
     // Add a safety margin to prevent truncation from accumulated floating-point
     // differences between measurement and rendering passes.
     // Uses 2% of content height (minimum 20pt) on top of getContentHeight()'s own margin.
     const safetyMargin = Math.max(20, measuredHeight * 0.02);
     actualPaperHeight = measuredHeight + safetyMargin;
-    console.log(`[printNodesToPDF] With safety margin: ${actualPaperHeight}pt (+${safetyMargin.toFixed(1)}pt)`);
+    log(`[printNodesToPDF] With safety margin: ${actualPaperHeight}pt (+${safetyMargin.toFixed(1)}pt)`);
   } else {
     actualPaperHeight = paperHeight;
   }
 
   // 2. Second pass (or only pass if fixed height): render with correct dimensions
-  console.log(`[printNodesToPDF] Creating PDF with dimensions: ${paperWidth}pt x ${actualPaperHeight}pt`);
+  log(`[printNodesToPDF] Creating PDF with dimensions: ${paperWidth}pt x ${actualPaperHeight}pt`);
 
   // Disable page breaks when:
   // - wrap=true is set on Page component (thermal receipt-style continuous output)
@@ -345,7 +349,7 @@ export async function printNodesToPDF(
 
   // Log final rendering Y for comparison with measurement
   const renderingHeight = generator.getContentHeight(0);
-  console.log(`[printNodesToPDF] Rendering complete: final Y = ${renderingHeight}pt (page height = ${actualPaperHeight}pt, delta = ${(actualPaperHeight - renderingHeight).toFixed(1)}pt)`);
+  log(`[printNodesToPDF] Rendering complete: final Y = ${renderingHeight}pt (page height = ${actualPaperHeight}pt, delta = ${(actualPaperHeight - renderingHeight).toFixed(1)}pt)`);
 
   // Finalize (no-op with two-pass rendering, kept for backwards compatibility)
   generator.finalizePageHeight();
