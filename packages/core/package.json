@@ -1,6 +1,6 @@
 {
   "name": "@thermal-print/core",
-  "version": "0.3.1-beta.6",
+  "version": "0.3.1-beta.7",
   "type": "module",
   "description": "Core types for thermal printer libraries",
   "main": "dist/index.js",
