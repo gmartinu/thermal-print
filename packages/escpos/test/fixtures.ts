@@ -51,6 +51,10 @@ const spaceBetween = (left: PrintNode, right: PrintNode): PrintNode =>
 export const TINY_PNG =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAAAAADhZOFXAAAAEElEQVR4nGNg+I8GGcgSAQB8BB/hEhcEHgAAAABJRU5ErkJggg==";
 
+/** 160x8 PNG — wider than any column, so resizing is observable. */
+export const WIDE_PNG =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAKAAAAAICAAAAABb66tyAAAAJElEQVR4nGNgAIL/QDBo6UHhCDw0w2BwxGgIjobgQDtiSIcgABkEfZ++ziVCAAAAAElFTkSuQmCC";
+
 export const simpleReceipt = (): PrintNode =>
   doc([
     page({ padding: 10 }, [
@@ -217,6 +221,12 @@ export const imageInNarrowView = (): PrintNode =>
     page({}, [
       view({ width: "30%", alignItems: "center" }, [image({}, TINY_PNG)]),
     ]),
+  ]);
+
+/** Item 8: an image wider than the column its parent View allows. */
+export const wideImageInNarrowView = (): PrintNode =>
+  doc([
+    page({}, [view({ width: "30%" }, [image({}, WIDE_PNG)])]),
   ]);
 
 /** Items 1/2/3/10: every rich-mode style property in one document. */

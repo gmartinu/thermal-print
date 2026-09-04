@@ -8,7 +8,7 @@
 
 // Main conversion function
 export { printNodesToESCPOS } from './converter';
-export type { PrintNodeToESCPOSOptions, FontMode } from './converter';
+export type { PrintNodeToESCPOSOptions, FontMode, StyleMode } from './converter';
 
 // Core classes (for advanced usage)
 export { ESCPOSGenerator } from './generator';
@@ -24,16 +24,30 @@ export {
   extractTextStyle,
   extractViewStyle,
   isBold,
+  baseFontLevel,
+  fontSizeLevelDelta,
+  resolveFontLevel,
   mapFontSizeToESCPOS,
+  columnsForLevel,
+  FONT_LEVEL_SIZES,
+  FONT_LEVEL_COLUMN_UNITS,
+  POINTS_PER_LINE,
+  POINTS_PER_COLUMN,
   mapTextAlign,
+  parseSize,
+  parsePercentageWidth,
   calculateSpacing,
+  calculateHorizontalSpacing,
   isDashedBorder,
   generateDividerLine,
   mergeStyles,
   parseWidth,
+  distributeColumnWidths,
+  distributeGaps,
   alignTextInColumn,
   wrapText,
 } from './styles';
+export type { ESCPOSFontSize, FontLevel } from './styles';
 
 // Encodings
 export { encodeCP860 } from './encodings/cp860';

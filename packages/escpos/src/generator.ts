@@ -1,13 +1,21 @@
 import { encodeText } from "./commands/escpos";
 import {
+  baseFontLevel,
+  calculateSpacing,
+  columnsForLevel,
   extractTextStyle,
   extractViewStyle,
+  FONT_LEVEL_COLUMN_UNITS,
+  FONT_LEVEL_SIZES,
+  FontLevel,
   generateDividerLine,
   isBold,
   isDashedBorder,
   mapTextAlign,
+  resolveFontLevel,
+  wrapText,
 } from "./styles";
-import type { FontMode } from "./converter";
+import type { FontMode, StyleMode } from "./converter";
 import { ConversionContext } from "./types";
 import { CommandAdapter, ESCPOSCommandAdapter } from "./command-adapters";
 
@@ -62,8 +70,19 @@ export class ESCPOSGenerator {
   private buffer: ESCPOSBuffer;
   private context: ConversionContext;
   private commandAdapter: CommandAdapter;
-  private fontMode: FontMode;
   private compact: boolean;
+  private styleMode: StyleMode;
+
+  /** Font level the document sits at when no fontSize asks for anything else. */
+  private baseLevel: FontLevel;
+  /** Font level currently loaded in the printer. */
+  private currentLevel: FontLevel;
+  /** Horizontal padding in force, in Font A columns, as a stack of View frames. */
+  private paddingStack: { left: number; right: number }[] = [];
+  private reservedLeft = 0;
+  private reservedRight = 0;
+  /** Whether the next addText() starts a new printed line (so it gets the indent). */
+  private atLineStart = true;
 
   constructor(
     paperWidth = 42,
@@ -71,21 +90,35 @@ export class ESCPOSGenerator {
     debug = false,
     commandAdapter?: CommandAdapter,
     fontMode: FontMode = "medium",
-    compact = false
+    compact = false,
+    styleMode: StyleMode = "legacy"
   ) {
-    this.fontMode = fontMode;
     this.compact = compact;
+    this.styleMode = styleMode;
     this.buffer = new ESCPOSBuffer();
 
     // Use provided adapter or default to ESC/POS
     this.commandAdapter = commandAdapter || new ESCPOSCommandAdapter();
+
+    this.baseLevel = baseFontLevel(fontMode);
+    this.currentLevel = this.baseLevel;
+
+    // Which ESC/POS font the document starts in. In "rico" it always follows
+    // fontMode; in "legacy" an adapter may pin its historical font so the
+    // printers already in the field keep receiving the same bytes
+    // (ESC/Bematech hardcoded Font B before DEV-2390).
+    const fontFromMode = FONT_LEVEL_SIZES[this.baseLevel].font;
+    const baseFont =
+      styleMode === "rico"
+        ? fontFromMode
+        : this.commandAdapter.getLegacyDefaultFont?.() ?? fontFromMode;
 
     this.context = {
       paperWidth,
       basePaperWidth: paperWidth,
       currentAlign: "left",
       currentSize: { width: 1, height: 1 },
-      currentFont: 0,
+      currentFont: baseFont,
       currentBold: false,
       encoding,
       debug,
@@ -159,12 +192,110 @@ export class ESCPOSGenerator {
   }
 
   /**
+   * Move the printer to a font level (font + character size in one ESC ! ).
+   * Also re-derives the line width, since a Font B line fits 4/3 of the
+   * characters a Font A line does and a 2x2 line fits half.
+   */
+  setFontLevel(level: FontLevel): void {
+    this.currentLevel = level;
+    const size = FONT_LEVEL_SIZES[level];
+
+    const changed =
+      this.context.currentFont !== size.font ||
+      this.context.currentSize.width !== size.width ||
+      this.context.currentSize.height !== size.height;
+
+    this.context.currentFont = size.font;
+    this.context.currentSize = { width: size.width, height: size.height };
+    this.syncPaperWidth();
+
+    if (changed) {
+      this.applyPrintMode();
+    }
+  }
+
+  /**
+   * Set font level and bold together, emitting at most one ESC ! command.
+   * Used by "rico" mode, where both can change on the same element.
+   */
+  setPrintState(level: FontLevel, bold: boolean): void {
+    const size = FONT_LEVEL_SIZES[level];
+    const changed =
+      this.context.currentFont !== size.font ||
+      this.context.currentSize.width !== size.width ||
+      this.context.currentSize.height !== size.height ||
+      this.context.currentBold !== bold;
+
+    this.currentLevel = level;
+    this.context.currentFont = size.font;
+    this.context.currentSize = { width: size.width, height: size.height };
+    this.context.currentBold = bold;
+    this.syncPaperWidth();
+
+    if (changed) {
+      this.applyPrintMode();
+    }
+  }
+
+  /** Recomputes the usable line width from the current level and padding. */
+  private syncPaperWidth(): void {
+    this.context.paperWidth = columnsForLevel(
+      this.context.basePaperWidth,
+      this.baseLevel,
+      this.currentLevel,
+      this.reservedLeft + this.reservedRight
+    );
+  }
+
+  /** The indent, in characters of the CURRENT font level. */
+  private indentChars(): number {
+    if (this.reservedLeft <= 0) return 0;
+    return Math.round(this.reservedLeft / FONT_LEVEL_COLUMN_UNITS[this.currentLevel]);
+  }
+
+  /**
+   * Reserve horizontal padding for the children of a View (or a Page).
+   * Widths and wrapping inside the frame shrink, and every line printed while
+   * the frame is open is indented by paddingLeft.
+   */
+  pushHorizontalPadding(leftColumns: number, rightColumns: number): void {
+    // Never let padding eat more than half the paper — a Page margin arrives in
+    // points and a bad value would otherwise leave a one-character column.
+    const maxTotal = Math.floor((this.context.basePaperWidth * FONT_LEVEL_COLUMN_UNITS[this.baseLevel]) / 2);
+    const available = Math.max(0, maxTotal - this.reservedLeft - this.reservedRight);
+    const left = Math.max(0, Math.min(leftColumns, available));
+    const right = Math.max(0, Math.min(rightColumns, available - left));
+
+    this.paddingStack.push({ left, right });
+    this.reservedLeft += left;
+    this.reservedRight += right;
+    this.syncPaperWidth();
+  }
+
+  /** Release the innermost horizontal padding frame. */
+  popHorizontalPadding(): void {
+    const frame = this.paddingStack.pop();
+    if (!frame) return;
+    this.reservedLeft -= frame.left;
+    this.reservedRight -= frame.right;
+    this.syncPaperWidth();
+  }
+
+  /** Feed blank lines for a vertical margin/padding/height given in points. */
+  addSpacing(points?: number | string): void {
+    const lines = calculateSpacing(points);
+    if (lines > 0) {
+      this.addLineFeed(lines);
+    }
+  }
+
+  /**
    * Apply current print mode (size + bold + font) using command adapter.
-   * Uses fontMode to determine Font A vs Font B base.
+   * The font comes from context.currentFont, which starts at the fontMode base
+   * and only moves in "rico" mode, when a fontSize asks for another level.
    */
   private applyPrintMode(): void {
-    // For "small" mode, use Font B (bit 0 = 1). For "medium", use Font A (bit 0 = 0).
-    const useFontB = this.fontMode === "small";
+    const useFontB = this.context.currentFont === 1;
     const command = this.commandAdapter.getCharacterSizeCommand(
       this.context.currentSize.width,
       this.context.currentSize.height,
@@ -180,6 +311,12 @@ export class ESCPOSGenerator {
    */
   resetFormatting(): void {
     this.setAlign("left");
+
+    if (this.styleMode === "rico") {
+      this.setPrintState(this.baseLevel, false);
+      return;
+    }
+
     this.setBold(false);
     this.setSize({ width: 1, height: 1 });
   }
@@ -189,9 +326,10 @@ export class ESCPOSGenerator {
    */
   addText(text: string): void {
     if (text) {
-      // Encode text to CP860 for Portuguese support
-      const encodedBytes = encodeText(text);
+      const indent = this.atLineStart ? this.indentChars() : 0;
+      const encodedBytes = encodeText(indent > 0 ? " ".repeat(indent) + text : text);
       this.buffer.pushArray(encodedBytes);
+      this.atLineStart = false;
     }
   }
 
@@ -205,6 +343,7 @@ export class ESCPOSGenerator {
     }
     const command = this.commandAdapter.getLineFeedCommand(count);
     this.buffer.pushArray(command);
+    this.atLineStart = true;
   }
 
   /**
@@ -213,6 +352,7 @@ export class ESCPOSGenerator {
   addLineFeed(lines = 1): void {
     const command = this.commandAdapter.getLineFeedCommand(lines);
     this.buffer.pushArray(command);
+    this.atLineStart = true;
   }
 
   /**
@@ -221,7 +361,7 @@ export class ESCPOSGenerator {
    */
   addDivider(dashed = false): void {
     this.setAlign("left");
-    const line = generateDividerLine(this.context.paperWidth, dashed);
+    const line = generateDividerLine(this.getPaperWidth(), dashed);
     this.addText(line);
     this.addNewline();
   }
@@ -252,8 +392,14 @@ export class ESCPOSGenerator {
    * Add image from base64 or data URI
    * Converts image to monochrome bitmap and prints using ESC/POS raster graphics
    * @param source - Base64 string, data URI, or object with uri property
+   * @param maxWidthColumns - width budget in characters; comes from the parent
+   *   View's percentage width. Without it an image inside a `width: "30%"` View
+   *   printed across the whole paper.
    */
-  async addImage(source: string | { uri: string }): Promise<void> {
+  async addImage(
+    source: string | { uri: string },
+    maxWidthColumns?: number
+  ): Promise<void> {
     try {
       // Import Jimp dynamically to avoid loading if not needed
       const { Jimp } = await import("jimp");
@@ -288,7 +434,7 @@ export class ESCPOSGenerator {
       // Get paper width in pixels (assuming 8 dots per mm for 80mm thermal printer)
       // Standard 80mm paper = ~576 pixels at 8 dots/mm (72 dpi)
       // We'll use 384 pixels as max width (48 chars * 8 pixels per char)
-      const maxWidth = this.context.paperWidth * 8;
+      const maxWidth = Math.max(1, maxWidthColumns ?? this.getPaperWidth()) * 8;
 
       // Resize image to fit paper width while maintaining aspect ratio
       if (image.width > maxWidth) {
@@ -345,33 +491,76 @@ export class ESCPOSGenerator {
   }
 
   /**
-   * Apply text styles from style object.
-   * When fontMode is set, fontSize from components is IGNORED for font selection.
-   * The fontMode determines the global ESC/POS font (small/medium/large).
+   * Apply text styles from a style object.
+   *
+   * @param style - the element's own style
+   * @param options.inheritedAlign - alignment from an ancestor View's alignItems,
+   *   used only when the element does not set textAlign itself. Before DEV-2390
+   *   `alignItems: "center"` on a View simply never reached its children.
+   * @param options.text - the text about to be printed. In "rico" mode it is
+   *   used to check whether a 2x2 line actually fits; on 58mm paper a double
+   *   size title only has ~16 columns, and wrapping it looks worse than
+   *   printing it one level down.
    */
-  applyTextStyle(style: any): void {
+  applyTextStyle(
+    style: any,
+    options?: { inheritedAlign?: "left" | "center" | "right"; text?: string }
+  ): void {
     const textStyle = extractTextStyle(style);
 
-    // Set alignment
-    const align = mapTextAlign(textStyle.textAlign);
+    // Set alignment — the element's own textAlign wins over the inherited one
+    const align = style?.textAlign
+      ? mapTextAlign(style.textAlign)
+      : options?.inheritedAlign ?? "left";
     this.setAlign(align);
 
-    // Set bold
     const bold = isBold(textStyle);
-    this.setBold(bold);
 
-    // Font mode determines the fixed size — fontSize from components is ignored
-    const size = this.getFontModeSize();
-    this.setSize(size);
+    if (this.styleMode !== "rico") {
+      // Legacy: fontSize is ignored, the whole document prints at fontMode size
+      this.setBold(bold);
+      this.setSize({ width: 1, height: 1 });
+      return;
+    }
+
+    this.setPrintState(this.resolveTextLevel(textStyle.fontSize, options?.text), bold);
   }
 
   /**
-   * Get the ESC/POS character size based on the global fontMode.
-   * - small: Font B 1x1 (64 cols)
-   * - medium: Font A 1x1 (48 cols)
+   * The font level a piece of text should print at, honouring the 2x2 fallback.
+   * Public so the row layout can size its columns before printing them.
    */
-  private getFontModeSize(): { width: number; height: number } {
-    return { width: 1, height: 1 };
+  resolveTextLevel(fontSize?: number | string, text?: string): FontLevel {
+    const level = resolveFontLevel(this.baseLevel, fontSize);
+
+    if (level === 2 && text) {
+      const doubleWidth = columnsForLevel(
+        this.context.basePaperWidth,
+        this.baseLevel,
+        2,
+        this.reservedLeft + this.reservedRight
+      );
+      if (wrapText(text, doubleWidth).length > 1) {
+        return 1;
+      }
+    }
+
+    return level;
+  }
+
+  /** The font level currently loaded in the printer. */
+  getFontLevel(): FontLevel {
+    return this.currentLevel;
+  }
+
+  /** The document's base font level (what fontMode asked for). */
+  getBaseFontLevel(): FontLevel {
+    return this.baseLevel;
+  }
+
+  /** Whether richer styling (fontSize, spacing, per-column styles) is enabled. */
+  isRichStyleMode(): boolean {
+    return this.styleMode === "rico";
   }
 
   /**
@@ -379,17 +568,24 @@ export class ESCPOSGenerator {
    */
   applyViewSpacing(style: any, type: "before" | "after"): void {
     const viewStyle = extractViewStyle(style);
+    const rich = this.styleMode === "rico";
+    const padding = viewStyle.padding;
+    const margin = viewStyle.margin;
 
+    // CSS box model order, the same one @thermal-print/pdf follows:
+    // margin -> border -> padding -> content -> padding -> border -> margin
     if (type === "before") {
-      // Apply top border
+      if (rich) this.addSpacing(viewStyle.marginTop ?? margin);
       if (viewStyle.borderTop) {
         this.addDivider(isDashedBorder(viewStyle.borderTop));
       }
+      if (rich) this.addSpacing(viewStyle.paddingTop ?? padding);
     } else {
-      // Apply bottom border
+      if (rich) this.addSpacing(viewStyle.paddingBottom ?? padding);
       if (viewStyle.borderBottom) {
         this.addDivider(isDashedBorder(viewStyle.borderBottom));
       }
+      if (rich) this.addSpacing(viewStyle.marginBottom ?? margin);
     }
   }
 
@@ -443,7 +639,9 @@ export class ESCPOSGenerator {
   getBuffer(): Buffer {
     const buffer = this.buffer.toBuffer();
 
-    // Remove leading line feeds (0x0A)
+    // Remove leading line feeds (0x0A) so a receipt never starts with blank
+    // paper. Note this also swallows a marginTop on the very first View in
+    // "rico" mode — deliberate, and covered by a test.
     let start = 0;
     while (start < buffer.length && buffer[start] === 0x0a) {
       start++;

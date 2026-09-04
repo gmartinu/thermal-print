@@ -652,10 +652,13 @@ export const calculatePrintMode = (options: {
   doubleHeight?: boolean;
   doubleWidth?: boolean;
   underline?: boolean;
+  /** Font B (9×17, narrower) instead of Font A (12×24). Default: Font B. */
+  useFontB?: boolean;
 }): number[] => {
-  // Use Font B (narrower, 9×17 dots) for consistency with ESC/POS
-  // Font B fits more characters per line (better for 48-char receipts)
-  let n = 0x01;                          // Bit 0 - Font B
+  // Bit 0 selects the font. This used to be hardcoded to Font B, which meant a
+  // document asking for Font A silently printed condensed on Bematech while
+  // printing normal over plain ESC/POS — same PrintNode tree, two layouts.
+  let n = options.useFontB === false ? 0x00 : 0x01;
   if (options.emphasized) n |= 0x08;     // Bit 3
   if (options.doubleHeight) n |= 0x10;   // Bit 4
   if (options.doubleWidth) n |= 0x20;    // Bit 5

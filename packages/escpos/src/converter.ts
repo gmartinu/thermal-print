@@ -15,6 +15,23 @@ import { CommandAdapter, ESCPOSCommandAdapter, ESCBematechCommandAdapter } from 
  */
 export type FontMode = 'small' | 'medium';
 
+/**
+ * How much of the component styling the renderer honours.
+ *
+ * - "legacy" (default): exactly the output shipped before DEV-2390. fontSize,
+ *   margin, padding and Page margins are ignored, as they always were. Every
+ *   printer already in the field keeps receiving the same bytes.
+ * - "rico": fontSize (three levels, relative to fontMode), vertical
+ *   margin/padding, horizontal padding, Page margins and per-column styling
+ *   inside a row are honoured, bringing ESC/POS output closer to the PDF one.
+ *
+ * Layout bugs (alignItems that did not reach children, empty View height,
+ * rows of three or more columns, cells that truncated instead of wrapping,
+ * images ignoring the parent width) are fixed in BOTH modes — they were never
+ * intentional behaviour.
+ */
+export type StyleMode = 'legacy' | 'rico';
+
 export interface PrintNodeToESCPOSOptions {
   paperWidth?: number; // Width in characters (default: 48 for 80mm thermal)
   encoding?: string; // Character encoding (default: 'utf-8')
@@ -24,6 +41,7 @@ export interface PrintNodeToESCPOSOptions {
   commandAdapter?: CommandAdapter | 'escpos' | 'escbematech'; // Command protocol adapter (default: 'escpos')
   fontMode?: FontMode; // Global font mode — overrides fontSize-based font selection (default: 'medium')
   compact?: boolean; // Minimal line spacing (0 dots) — works with any fontMode (default: false)
+  styleMode?: StyleMode; // How much component styling to honour (default: 'legacy')
 }
 
 /**
@@ -96,6 +114,7 @@ export async function printNodesToESCPOS(
     commandAdapter: commandAdapterConfig, // Command protocol adapter
     fontMode = "medium", // Default to Font A 42 cols
     compact = false, // Minimal line spacing
+    styleMode = "legacy", // Byte-compatible with pre-DEV-2390 output
   } = options || {};
 
   // Determine paperWidth based on fontMode (unless explicitly overridden)
@@ -113,14 +132,22 @@ export async function printNodesToESCPOS(
 
   if (debug) {
     console.log(`Using command adapter: ${commandAdapter.getName()}`);
-    console.log(`Font mode: ${fontMode} (paperWidth: ${paperWidth})`);
+    console.log(`Font mode: ${fontMode} (paperWidth: ${paperWidth}), style mode: ${styleMode}`);
     console.log("\n========== PRINT NODE TREE (JSON) ==========");
     console.log(JSON.stringify(printNode, null, 2));
     console.log("============================================\n");
   }
 
   // Create ESC/POS generator with command adapter, font mode and compact flag
-  const generator = new ESCPOSGenerator(paperWidth, encoding, debug, commandAdapter, fontMode, compact);
+  const generator = new ESCPOSGenerator(
+    paperWidth,
+    encoding,
+    debug,
+    commandAdapter,
+    fontMode,
+    compact,
+    styleMode
+  );
 
   // Traverse tree and generate commands
   const traverser = new TreeTraverser(generator);
