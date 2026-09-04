@@ -441,14 +441,15 @@ this.printer.buffer.write(Buffer.from([0x1B, 0x32])); // 1/6 inch
 
 **Solution**:
 ```javascript
-// For 58mm paper (usually 32 characters wide)
-const generator = new ESCPOSGenerator(32, "cp850", true);
+// Widths are MEASURED per font, not derived — see docs/STYLING.md
+// 58mm paper
+const generator = new ESCPOSGenerator(32, "cp860", true);
 
-// For 80mm paper (usually 48 characters wide) - CURRENT
-const generator = new ESCPOSGenerator(48, "cp850", true);
+// 80mm paper, Font A (fontMode "medium", the default) - CURRENT
+const generator = new ESCPOSGenerator(42, "cp860", true);
 
-// For custom width
-const generator = new ESCPOSGenerator(42, "cp850", true);
+// 80mm paper, Font B (fontMode "small")
+const generator = new ESCPOSGenerator(56, "cp860", true);
 ```
 
 ### Character Encoding Issues
