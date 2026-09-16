@@ -5,7 +5,7 @@
  *
  * Main APIs:
  * - convertToPrintNodes(component, options) -> PrintNode (React -> IR)
- * - convertToESCPOS(component, options) -> Buffer (React -> ESC/POS, convenience wrapper)
+ * - convertToESCPOS(component, options) -> Uint8Array (React -> ESC/POS, convenience wrapper)
  */
 
 import { ReactElement } from "react";
@@ -24,7 +24,7 @@ import { createAdapter, RendererAdapter, ComponentMapping } from "./adapters";
  *
  * @param component - React component (typically @react-pdf/renderer components)
  * @param options - Conversion options
- * @returns Buffer containing ESC/POS commands ready to be sent to printer
+ * @returns Uint8Array containing ESC/POS commands ready to be sent to printer
  *
  * @example
  * ```typescript
@@ -43,7 +43,7 @@ import { createAdapter, RendererAdapter, ComponentMapping } from "./adapters";
 export async function convertToESCPOS(
   component: ReactElement,
   options?: ConversionOptions
-): Promise<Buffer> {
+): Promise<Uint8Array> {
   const {
     adapter: adapterConfig,
     ...escposOptions

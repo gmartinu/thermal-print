@@ -5,7 +5,7 @@
 export interface ESCPOSCommand {
   type: 'raw' | 'text' | 'feed' | 'cut' | 'image' | 'qr';
   data?: any;
-  buffer?: Buffer;
+  buffer?: Uint8Array;
 }
 
 export interface ConversionContext {
@@ -20,5 +20,5 @@ export interface ConversionContext {
   currentBold: boolean;
   encoding: string;
   debug: boolean;
-  buffer: Buffer[];
+  buffer: Uint8Array[];
 }

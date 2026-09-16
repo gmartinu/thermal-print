@@ -49,7 +49,24 @@ const GS_SEQUENCES: Record<number, [string, number]> = {
  * Renders a buffer as a line-oriented, human-readable transcript.
  * Control sequences become <ESC ! 00> tokens; text stays text.
  */
-export function decodeForHumans(buffer: Buffer): string {
+export function toHex(bytes: Uint8Array): string {
+  let out = "";
+  for (const b of bytes) out += b.toString(16).padStart(2, "0");
+  return out;
+}
+
+/** Index of the first occurrence of `needle` in `haystack`, or -1. */
+export function indexOfBytes(haystack: Uint8Array, needle: number[]): number {
+  outer: for (let i = 0; i + needle.length <= haystack.length; i++) {
+    for (let j = 0; j < needle.length; j++) {
+      if (haystack[i + j] !== needle[j]) continue outer;
+    }
+    return i;
+  }
+  return -1;
+}
+
+export function decodeForHumans(buffer: Uint8Array): string {
   const out: string[] = [];
   let line = "";
   let i = 0;
@@ -97,12 +114,12 @@ export function decodeForHumans(buffer: Buffer): string {
 
 export interface SnapshotEntry {
   name: string;
-  buffer: Buffer;
+  buffer: Uint8Array;
 }
 
 function render(entries: SnapshotEntry[]): string {
   const blocks = entries.map(({ name, buffer }) => {
-    const hex = buffer.toString("hex");
+    const hex = toHex(buffer);
     const chunks = hex.match(/.{1,64}/g) ?? [];
     return [
       `### ${name}`,

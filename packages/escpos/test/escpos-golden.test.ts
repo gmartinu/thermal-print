@@ -18,7 +18,7 @@ import { describe, it } from "node:test";
 
 import { printNodesToESCPOS, type PrintNodeToESCPOSOptions } from "../src/converter";
 import { PARITY_FIXTURES, PROBE_FIXTURES, type Fixture } from "./fixtures";
-import { loadOrWriteGolden, type SnapshotEntry } from "./snapshot";
+import { loadOrWriteGolden, toHex, type SnapshotEntry } from "./snapshot";
 
 interface Variant {
   file: string;
@@ -57,7 +57,7 @@ describe("legacy byte parity", () => {
 
       for (const entry of entries) {
         assert.equal(
-          entry.buffer.toString("hex"),
+          toHex(entry.buffer),
           golden[entry.name],
           `${variant.file}: ${entry.name} changed bytes in legacy mode`
         );
@@ -74,7 +74,7 @@ describe("layout probes", () => {
 
     for (const entry of entries) {
       assert.equal(
-        entry.buffer.toString("hex"),
+        toHex(entry.buffer),
         golden[entry.name],
         `probes-legacy.snap: ${entry.name} changed bytes`
       );

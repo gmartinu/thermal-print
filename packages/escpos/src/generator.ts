@@ -20,6 +20,25 @@ import { ConversionContext } from "./types";
 import { CommandAdapter, ESCPOSCommandAdapter } from "./command-adapters";
 
 /**
+ * Decodes base64 without Buffer, so the generator also runs in the browser.
+ * `atob` is a global in browsers and in Node >= 16.
+ */
+function base64ToBytes(base64: string): Uint8Array {
+  const decode = (globalThis as { atob?: (data: string) => string }).atob;
+  if (typeof decode !== "function") {
+    throw new Error(
+      "base64 decoding requires a global atob() (browser, or Node >= 16)"
+    );
+  }
+  const binary = decode(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+/**
  * Simple buffer implementation for accumulating ESC/POS commands
  */
 class ESCPOSBuffer {
@@ -40,10 +59,15 @@ class ESCPOSBuffer {
   }
 
   /**
-   * Get the buffer as a Node.js Buffer
+   * Get the accumulated bytes.
+   *
+   * Uint8Array, not Buffer: the generator runs in the browser too (the pdv-web
+   * inside the Android WebView), where `Buffer` does not exist. A Node Buffer
+   * IS a Uint8Array, so consumers that already fed the result to a serial port
+   * or an IPC channel keep working.
    */
-  toBuffer(): Buffer {
-    return Buffer.from(this.buffer);
+  toUint8Array(): Uint8Array {
+    return Uint8Array.from(this.buffer);
   }
 
   /**
@@ -459,11 +483,13 @@ export class ESCPOSGenerator {
         }
       }
 
-      // Convert base64 to buffer
-      const imageBuffer = Buffer.from(base64Data, "base64");
+      // Convert base64 to bytes (isomorphic: no Buffer)
+      const imageBytes = base64ToBytes(base64Data);
 
-      // Load image with Jimp (v1.x API)
-      const image = await Jimp.read(imageBuffer);
+      // Load image with Jimp (v1.x API). Jimp.read accepts an ArrayBuffer, and
+      // `imageBytes` owns its buffer exactly, so handing over `.buffer` is a
+      // zero-copy pass of the same bytes.
+      const image = await Jimp.read(imageBytes.buffer as ArrayBuffer);
 
       // Get paper width in pixels (assuming 8 dots per mm for 80mm thermal printer)
       // Standard 80mm paper = ~576 pixels at 8 dots/mm (72 dpi)
@@ -661,17 +687,17 @@ export class ESCPOSGenerator {
 
   /**
    * Add raw ESC/POS command
-   * @param data - Raw buffer data to send to printer
+   * @param data - Raw bytes to send to printer
    */
-  addRawCommand(data: Buffer): void {
+  addRawCommand(data: Uint8Array): void {
     this.buffer.pushArray(Array.from(data));
   }
 
   /**
    * Get the final buffer
    */
-  getBuffer(): Buffer {
-    const buffer = this.buffer.toBuffer();
+  getBuffer(): Uint8Array {
+    const buffer = this.buffer.toUint8Array();
 
     // Defensive: drop leading line feeds so a receipt could never start with
     // blank paper. The buffer opens with the adapter's init command, so in

@@ -38,7 +38,7 @@ import {
   wideImageInNarrowView,
   WIDE_PNG,
 } from "./fixtures";
-import { decodeForHumans, loadOrWriteGolden } from "./snapshot";
+import { decodeForHumans, indexOfBytes, loadOrWriteGolden, toHex } from "./snapshot";
 
 const RICO: PrintNodeToESCPOSOptions = { styleMode: "rico" };
 
@@ -161,7 +161,7 @@ describe("layout fixes (both style modes)", () => {
     ]);
 
     const buffer = await printNodesToESCPOS(tree);
-    const hex = buffer.toString("hex");
+    const hex = toHex(buffer);
     assert.ok(hex.includes("1b6101"), "expected ESC a 1 (center) from alignItems: center");
     assert.ok(hex.includes("1b6102"), "expected ESC a 2 (right) from alignItems: flex-end");
 
@@ -238,7 +238,7 @@ describe("layout fixes (both style modes)", () => {
 
   it("caps an image at the width its parent View allows and centers it", async () => {
     const buffer = await printNodesToESCPOS(wideImageInNarrowView());
-    const marker = buffer.indexOf(Buffer.from([0x1d, 0x76, 0x30]));
+    const marker = indexOfBytes(buffer, [0x1d, 0x76, 0x30]);
     assert.ok(marker >= 0, "expected a GS v 0 raster command");
 
     // 30% of 42 columns = 12 columns = 96 dots = 12 bytes per raster line
@@ -247,7 +247,7 @@ describe("layout fixes (both style modes)", () => {
     const unconstrained = await printNodesToESCPOS(
       doc([page({}, [view({}, [image({}, WIDE_PNG)])])])
     );
-    const wideMarker = unconstrained.indexOf(Buffer.from([0x1d, 0x76, 0x30]));
+    const wideMarker = indexOfBytes(unconstrained, [0x1d, 0x76, 0x30]);
     assert.equal(unconstrained[wideMarker + 4], 20, "without a constraint it keeps its 160px");
   });
 });
@@ -258,7 +258,7 @@ describe("styleMode: rico — fontSize", () => {
       doc([page({}, [text({ fontSize: 24 }, "TOTAL")])])
     );
     const withoutSize = await printNodesToESCPOS(doc([page({}, [text({}, "TOTAL")])]));
-    assert.equal(withSize.toString("hex"), withoutSize.toString("hex"));
+    assert.equal(toHex(withSize), toHex(withoutSize));
   });
 
   it("composes with fontMode: the base is the document, fontSize is a step", async () => {
@@ -470,7 +470,7 @@ describe("rico snapshots", () => {
 
       const golden = loadOrWriteGolden(variant.file, entries);
       for (const entry of entries) {
-        assert.equal(entry.buffer.toString("hex"), golden[entry.name], `${entry.name} changed`);
+        assert.equal(toHex(entry.buffer), golden[entry.name], `${entry.name} changed`);
       }
     });
   }
