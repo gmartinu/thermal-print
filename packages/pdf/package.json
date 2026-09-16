@@ -35,7 +35,7 @@
     "jspdf": "2.5.2"
   },
   "devDependencies": {
-    "typescript": "5.0.0",
+    "typescript": "5.9.3",
     "tsx": "4.20.6"
   },
   "publishConfig": {
