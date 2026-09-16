@@ -77,7 +77,7 @@ function createCommandAdapter(config?: CommandAdapter | 'escpos' | 'escbematech'
  *
  * @param printNode - Root PrintNode of the tree to convert
  * @param options - Conversion options
- * @returns Buffer containing ESC/POS commands ready to be sent to printer
+ * @returns Uint8Array containing ESC/POS commands ready to be sent to printer
  *
  * @example
  * ```typescript
@@ -104,7 +104,7 @@ function createCommandAdapter(config?: CommandAdapter | 'escpos' | 'escbematech'
 export async function printNodesToESCPOS(
   printNode: PrintNode,
   options?: PrintNodeToESCPOSOptions
-): Promise<Buffer> {
+): Promise<Uint8Array> {
   const {
     paperWidth: paperWidthOverride,
     encoding = "utf-8",

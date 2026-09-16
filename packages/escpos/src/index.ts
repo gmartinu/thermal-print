@@ -3,7 +3,7 @@
  *
  * ESC/POS command generation and thermal printer control
  *
- * Main API: printNodesToESCPOS(printNode, options) -> Buffer
+ * Main API: printNodesToESCPOS(printNode, options) -> Uint8Array
  */
 
 // Main conversion function
