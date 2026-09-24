@@ -4,12 +4,12 @@ import {
   alignTextInColumn,
   calculateHorizontalSpacing,
   distributeColumnWidths,
-  distributeGaps,
   extractTextStyle,
   extractViewStyle,
   FontLevel,
   FONT_LEVEL_COLUMN_UNITS,
   isBold,
+  layoutSpaceBetweenLine,
   mapTextAlign,
   mergeStyles,
   parsePercentageWidth,
@@ -299,13 +299,11 @@ export class TreeTraverser {
         });
       } else if (isSpaceBetween) {
         const parts = columnLines.map((lines) => lines[lineIdx] || "");
-        const used = parts.reduce((sum, part) => sum + part.length, 0);
-        const gaps = distributeGaps(used, paperWidth, parts.length - 1);
-        let rowText = parts[0];
-        for (let i = 1; i < parts.length; i++) {
-          rowText += " ".repeat(gaps[i - 1]) + parts[i];
-        }
-        this.generator.addTextLine(rowText);
+        const rowLines = layoutSpaceBetweenLine(parts, paperWidth);
+        rowLines.forEach((rowText, i) => {
+          if (i > 0) this.generator.addNewline();
+          this.generator.addTextLine(rowText);
+        });
       } else {
         const parts = columnLines.map((lines) => lines[lineIdx] || "");
         const spacingBetweenColumns = Math.max(0, parts.length - 1);

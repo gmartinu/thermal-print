@@ -137,6 +137,28 @@ Implemented in `src/traverser.ts:113-201`
 // Output: "Total                                        $99.99"
 ```
 
+**space-between wider than the paper** (both style modes). A row that fits is
+spread exactly as above. When the parts plus one space per gap do not fit in
+`paperWidth`, the renderer no longer sends the long line for the printer to
+break wherever the column ends (that split `R$ 4,50` into `R$ 4` / `,50`):
+
+- the **last** cell (the amount) prints whole, right-aligned;
+- the cells before it are joined by a space and wrap by word in
+  `paperWidth - len(last) - 1`, with the amount on the label's last line;
+- if a label word is wider than that (or the amount leaves no room), the label
+  takes its own line(s) and the amount goes right-aligned on the next one.
+
+```
+58mm / 32 columns
+1 - Cartao de Debito
+cartao                   R$ 4,50
+```
+
+`wrapText` also keeps `R$`, `+` and `-` with the number after them
+(`"R$ 4,50"` is one word) whenever the group fits in the column.
+Layout: `layoutSpaceBetweenLine()` in `packages/escpos/src/styles.ts`; tests in
+`packages/escpos/test/escpos-space-between.test.ts`.
+
 **Example: center (now works)**
 ```typescript
 <View style={{ flexDirection: 'row', justifyContent: 'center' }}>
@@ -484,5 +506,6 @@ of paper for a single row.
 
 ## Version History
 
+- **escpos 0.4.0-beta.1**: space-between rows wider than the paper keep the amount whole (DEV-2635)
 - **v1.2.0+**: Added `justifyContent: 'center'` support for row layouts
 - **v1.0.0**: Initial release with `space-between` and column layouts
