@@ -145,15 +145,31 @@ describe("DEV-2635: layoutSpaceBetweenLine", () => {
     assert.equal(amount.length, 31);
     const lines = layoutSpaceBetweenLine(["Total", amount], 32);
     assert.deepEqual(lines, ["Total", " " + amount]);
+    // Wider than the paper: it cannot be one line, so it breaks at its space and
+    // the number itself stays whole instead of the printer cutting it at col 32.
     const wider = amount + "99";
-    assert.deepEqual(layoutSpaceBetweenLine(["Total", wider], 32), ["Total", wider]);
+    const number = wider.slice(3);
+    assert.deepEqual(layoutSpaceBetweenLine(["Total", wider], 32), [
+      "Total",
+      " ".repeat(30) + "R$",
+      " ".repeat(32 - number.length) + number,
+    ]);
+  });
+
+  it("an amount wider than the paper is wrapped within the paper, never past it", () => {
+    const lines = layoutSpaceBetweenLine(["Total", "R$ 1.234.567.890,00"], 12);
+    assert.ok(lines.every((line) => line.length <= 12), JSON.stringify(lines));
+    assert.equal(lines[0], "Total");
+    assert.equal(lines.slice(1).map((line) => line.trim()).join(""), "R$1.234.567.890,00");
   });
 
   it("an empty amount only wraps the label, an empty label only aligns the amount", () => {
     const longLabel = "palavra ".repeat(6).trim();
     assert.deepEqual(layoutSpaceBetweenLine([longLabel, ""], 32), wrapText(longLabel, 32));
-    const longAmount = "R$ " + "9".repeat(32);
-    assert.deepEqual(layoutSpaceBetweenLine(["", longAmount], 32), [longAmount]);
+    const longAmount = "R$ " + "9".repeat(28);
+    assert.deepEqual(layoutSpaceBetweenLine(["", longAmount], 32), [" " + longAmount]);
+    const tooWide = "R$ " + "9".repeat(32);
+    assert.deepEqual(layoutSpaceBetweenLine(["", tooWide], 32), [" ".repeat(30) + "R$", "9".repeat(32)]);
   });
 });
 

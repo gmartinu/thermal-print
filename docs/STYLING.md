@@ -147,6 +147,8 @@ break wherever the column ends (that split `R$ 4,50` into `R$ 4` / `,50`):
   `paperWidth - len(last) - 1`, with the amount on the label's last line;
 - if a label word is wider than that (or the amount leaves no room), the label
   takes its own line(s) and the amount goes right-aligned on the next one.
+- an amount wider than the paper itself cannot be one line: it wraps at its
+  space (`R$` / the number), each piece right-aligned, never past the paper.
 
 ```
 58mm / 32 columns

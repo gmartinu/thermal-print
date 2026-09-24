@@ -425,14 +425,21 @@ export function layoutSpaceBetweenLine(parts: string[], totalWidth: number): str
     .join(" ");
 
   if (value.length === 0) return wrapText(label, totalWidth);
-  const rightAligned = " ".repeat(Math.max(0, totalWidth - value.length)) + value;
+  const labelAlone = label.length === 0 ? [] : wrapText(label, totalWidth);
+  // An amount wider than the paper cannot stay whole; wrap it here instead of
+  // letting the printer cut it at an arbitrary column.
+  if (value.length > totalWidth) {
+    const valueLines = wrapText(value, totalWidth);
+    return [...labelAlone, ...valueLines.map((line) => " ".repeat(totalWidth - line.length) + line)];
+  }
+  const rightAligned = " ".repeat(totalWidth - value.length) + value;
   if (label.length === 0) return [rightAligned];
 
   const labelWidth = totalWidth - value.length - 1;
   // Breaking a word of the label in the middle is worse than giving the amount
   // a line of its own.
   const fitsBeside = labelWidth > 0 && wrapTokens(label, labelWidth).every((word) => word.length <= labelWidth);
-  if (!fitsBeside) return [...wrapText(label, totalWidth), rightAligned];
+  if (!fitsBeside) return [...labelAlone, rightAligned];
 
   const labelLines = wrapText(label, labelWidth);
   const last = labelLines.pop() ?? "";
