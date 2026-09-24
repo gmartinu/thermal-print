@@ -364,6 +364,88 @@ export function alignTextInColumn(
   }
 }
 
+/** Tokens that belong to the amount after them: "R$ 4,50", "+ 2", "- R$ 1,00". */
+const AMOUNT_PREFIXES = new Set(["R$", "+", "-"]);
+const AMOUNT_START = /^(?:[-+]?\d|R\$)/;
+
+/**
+ * The words wrapText breaks on. A currency sign or a sign glued to the amount
+ * after it by a space is one token, so a wrap never leaves "R$" at the end of
+ * one line and "4,50" at the start of the next. A group wider than the column
+ * stays apart: breaking it at its space beats slicing the number.
+ */
+function wrapTokens(text: string, width: number): string[] {
+  const words = text.split(" ");
+  const tokens: string[] = [];
+  for (let i = words.length - 1; i >= 0; i--) {
+    const word = words[i];
+    const next = tokens[0];
+    if (
+      AMOUNT_PREFIXES.has(word) &&
+      next !== undefined &&
+      AMOUNT_START.test(next) &&
+      word.length + 1 + next.length <= width
+    ) {
+      tokens[0] = word + " " + next;
+    } else {
+      tokens.unshift(word);
+    }
+  }
+  return tokens;
+}
+
+/**
+ * Lays out one line of a space-between row as the printed lines.
+ *
+ * A row that fits is spread across the paper as always. A row that does not
+ * fit used to go out longer than the paper, and the printer wrapped it
+ * wherever column `totalWidth` fell — splitting "R$ 4,50" into "R$ 4" and
+ * ",50". Now the last cell (the amount) stays whole and right-aligned, and the
+ * cells before it wrap by word in the width the amount leaves free, the amount
+ * sharing the last line of that label. When even that is impossible, the label
+ * takes its own line(s) and the amount goes right-aligned on the next one.
+ */
+export function layoutSpaceBetweenLine(parts: string[], totalWidth: number): string[] {
+  const used = parts.reduce((sum, part) => sum + part.length, 0);
+  const gapCount = parts.length - 1;
+
+  if (gapCount <= 0 || used + gapCount <= totalWidth) {
+    const gaps = distributeGaps(used, totalWidth, gapCount);
+    let rowText = parts[0] ?? "";
+    for (let i = 1; i < parts.length; i++) {
+      rowText += " ".repeat(gaps[i - 1]) + parts[i];
+    }
+    return [rowText];
+  }
+
+  const value = parts[parts.length - 1];
+  const label = parts
+    .slice(0, -1)
+    .filter((part) => part.length > 0)
+    .join(" ");
+
+  if (value.length === 0) return wrapText(label, totalWidth);
+  const labelAlone = label.length === 0 ? [] : wrapText(label, totalWidth);
+  // An amount wider than the paper cannot stay whole; wrap it here instead of
+  // letting the printer cut it at an arbitrary column.
+  if (value.length > totalWidth) {
+    const valueLines = wrapText(value, totalWidth);
+    return [...labelAlone, ...valueLines.map((line) => " ".repeat(totalWidth - line.length) + line)];
+  }
+  const rightAligned = " ".repeat(totalWidth - value.length) + value;
+  if (label.length === 0) return [rightAligned];
+
+  const labelWidth = totalWidth - value.length - 1;
+  // Breaking a word of the label in the middle is worse than giving the amount
+  // a line of its own.
+  const fitsBeside = labelWidth > 0 && wrapTokens(label, labelWidth).every((word) => word.length <= labelWidth);
+  if (!fitsBeside) return [...labelAlone, rightAligned];
+
+  const labelLines = wrapText(label, labelWidth);
+  const last = labelLines.pop() ?? "";
+  return [...labelLines, last + " ".repeat(totalWidth - last.length - value.length) + value];
+}
+
 /**
  * Splits text into multiple lines if it exceeds width
  */
@@ -383,7 +465,7 @@ export function wrapText(text: string, width: number): string[] {
     }
   };
 
-  for (const word of text.split(" ")) {
+  for (const word of wrapTokens(text, width)) {
     if ((currentLine + " " + word).trim().length <= width) {
       currentLine = (currentLine + " " + word).trim();
       continue;
