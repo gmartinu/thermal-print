@@ -173,11 +173,11 @@ importers:
         specifier: 18.0.0
         version: 18.0.0
       '@types/react-dom':
-        specifier: 18.0.0
-        version: 18.0.0
+        specifier: 18.3.7
+        version: 18.3.7(@types/react@18.0.0)
       '@types/react-reconciler':
-        specifier: 0.28.0
-        version: 0.28.0
+        specifier: 0.28.9
+        version: 0.28.9(@types/react@18.0.0)
       react:
         specifier: 18.0.0
         version: 18.0.0
@@ -1223,14 +1223,21 @@ packages:
   '@types/raf@3.4.3':
     resolution: {integrity: sha512-c4YAvMedbPZ5tEyxzQdMoOhhJ4RD3rngZIdwC2/qDN3d7JpEhB6fiBRKVY1lg5B7Wk+uPBjn5f39j1/2MY1oOw==}
 
-  '@types/react-dom@18.0.0':
-    resolution: {integrity: sha512-49897Y0UiCGmxZqpC8Blrf6meL8QUla6eb+BBhn69dTXlmuOlzkfr7HHY/O8J25e1lTUMs+YYxSlVDAaGHCOLg==}
+  '@types/react-dom@18.3.7':
+    resolution: {integrity: sha512-MEe3UeoENYVFXzoXEWsvcpg6ZvlrFNlOQ7EOsvhI3CfAXwzPfO8Qwuxd40nepsYKqyyVQnTdEfv68q91yLcKrQ==}
+    peerDependencies:
+      '@types/react': ^18.0.0
 
   '@types/react-dom@19.0.0':
     resolution: {integrity: sha512-1KfiQKsH1o00p9m5ag12axHQSb3FOU9H20UTrujVSkNhuCrRHiQWFqgEnTNK5ZNfnzZv8UWrnXVqCmCF9fgY3w==}
 
   '@types/react-reconciler@0.28.0':
     resolution: {integrity: sha512-5cjk9ottZAj7eaTsqzPUIlrVbh3hBAO2YaEL1rkjHKB3xNAId7oU8GhzvAX+gfmlfoxTwJnBjPxEHyxkEA1Ffg==}
+
+  '@types/react-reconciler@0.28.9':
+    resolution: {integrity: sha512-HHM3nxyUZ3zAylX8ZEyrDNd2XZOnQ0D5XfunJF5FLQnZbHHYq4UWvW1QfelQNXv1ICNkwYhfxjwfnqivYB6bFg==}
+    peerDependencies:
+      '@types/react': '*'
 
   '@types/react@18.0.0':
     resolution: {integrity: sha512-7+K7zEQYu7NzOwQGLR91KwWXXDzmTFODRVizJyIALf6RfLv2GDpqpknX64pvRVILXCpXi7O/pua8NGk44dLvJw==}
@@ -3433,9 +3440,9 @@ snapshots:
   '@types/raf@3.4.3':
     optional: true
 
-  '@types/react-dom@18.0.0':
+  '@types/react-dom@18.3.7(@types/react@18.0.0)':
     dependencies:
-      '@types/react': 19.2.4
+      '@types/react': 18.0.0
 
   '@types/react-dom@19.0.0':
     dependencies:
@@ -3444,6 +3451,10 @@ snapshots:
   '@types/react-reconciler@0.28.0':
     dependencies:
       '@types/react': 19.2.4
+
+  '@types/react-reconciler@0.28.9(@types/react@18.0.0)':
+    dependencies:
+      '@types/react': 18.0.0
 
   '@types/react@18.0.0':
     dependencies:
