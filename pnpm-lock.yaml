@@ -136,8 +136,8 @@ importers:
         specifier: 7.1.9
         version: 7.1.9
       '@types/react':
-        specifier: 19.0.0
-        version: 19.0.0
+        specifier: 19.2.4
+        version: 19.2.4
       '@types/react-dom':
         specifier: 19.0.0
         version: 19.0.0
@@ -170,14 +170,14 @@ importers:
         version: 0.29.0(react@18.0.0)
     devDependencies:
       '@types/react':
-        specifier: 18.0.0
-        version: 18.0.0
+        specifier: 18.3.27
+        version: 18.3.27
       '@types/react-dom':
         specifier: 18.3.7
-        version: 18.3.7(@types/react@18.0.0)
+        version: 18.3.7(@types/react@18.3.27)
       '@types/react-reconciler':
         specifier: 0.28.9
-        version: 0.28.9(@types/react@18.0.0)
+        version: 0.28.9(@types/react@18.3.27)
       react:
         specifier: 18.0.0
         version: 18.0.0
@@ -1239,20 +1239,11 @@ packages:
     peerDependencies:
       '@types/react': '*'
 
-  '@types/react@18.0.0':
-    resolution: {integrity: sha512-7+K7zEQYu7NzOwQGLR91KwWXXDzmTFODRVizJyIALf6RfLv2GDpqpknX64pvRVILXCpXi7O/pua8NGk44dLvJw==}
-
   '@types/react@18.3.27':
     resolution: {integrity: sha512-cisd7gxkzjBKU2GgdYrTdtQx1SORymWyaAFhaxQPK9bYO9ot3Y5OikQRvY0VYQtvwjeQnizCINJAenh/V7MK2w==}
 
-  '@types/react@19.0.0':
-    resolution: {integrity: sha512-MY3oPudxvMYyesqs/kW1Bh8y9VqSmf+tzqw3ae8a9DZW68pUe3zAdHeI1jc6iAysuRdACnVknHP8AhwD4/dxtg==}
-
   '@types/react@19.2.4':
     resolution: {integrity: sha512-tBFxBp9Nfyy5rsmefN+WXc1JeW/j2BpBHFdLZbEVfs9wn3E3NRFxwV0pJg8M1qQAexFpvz73hJXFofV0ZAu92A==}
-
-  '@types/scheduler@0.28.0':
-    resolution: {integrity: sha512-WuK7EQ0YBvNbYwanHo+x3kixrg10+7Ak4rmYmy1dYo3l4FCh0XWeoq/SdqQamKA5wShXse8WRhh0Tt1czTAuTQ==}
 
   '@types/trusted-types@2.0.7':
     resolution: {integrity: sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==}
@@ -3440,9 +3431,9 @@ snapshots:
   '@types/raf@3.4.3':
     optional: true
 
-  '@types/react-dom@18.3.7(@types/react@18.0.0)':
+  '@types/react-dom@18.3.7(@types/react@18.3.27)':
     dependencies:
-      '@types/react': 18.0.0
+      '@types/react': 18.3.27
 
   '@types/react-dom@19.0.0':
     dependencies:
@@ -3452,31 +3443,18 @@ snapshots:
     dependencies:
       '@types/react': 19.2.4
 
-  '@types/react-reconciler@0.28.9(@types/react@18.0.0)':
+  '@types/react-reconciler@0.28.9(@types/react@18.3.27)':
     dependencies:
-      '@types/react': 18.0.0
-
-  '@types/react@18.0.0':
-    dependencies:
-      '@types/prop-types': 15.7.15
-      '@types/scheduler': 0.28.0
-      csstype: 3.2.3
+      '@types/react': 18.3.27
 
   '@types/react@18.3.27':
     dependencies:
       '@types/prop-types': 15.7.15
       csstype: 3.2.3
-    optional: true
-
-  '@types/react@19.0.0':
-    dependencies:
-      csstype: 3.2.3
 
   '@types/react@19.2.4':
     dependencies:
       csstype: 3.2.3
-
-  '@types/scheduler@0.28.0': {}
 
   '@types/trusted-types@2.0.7':
     optional: true
