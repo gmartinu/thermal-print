@@ -171,7 +171,7 @@ interface VectorPDFOptions {
   paperHeight?: number | 'auto'; // Height in points or 'auto' for dynamic
   defaultFontSize?: number; // Default font size in points (default: 10)
   lineHeight?: number;      // Line height multiplier (default: 1.2)
-  fontFamily?: string;      // Font family (default: "Helvetica")
+  fontFamily?: string;      // Font family (default: "Helvetica"); UNICODE_FONT_FAMILY embeds a Unicode font so accents render, see docs/PDF_UNICODE_FONT.md
 }
 ```
 

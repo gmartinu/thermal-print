@@ -10,6 +10,8 @@
 
 import { jsPDF } from "jspdf";
 
+import { registerUnicodeFont } from "./fonts/register";
+
 export interface PDFGeneratorOptions {
   /**
    * Paper width in points (read from Page component's size prop)
@@ -44,7 +46,8 @@ export interface PDFGeneratorOptions {
   lineHeight?: number;
 
   /**
-   * Default font family
+   * Default font family: a jsPDF built-in ("Helvetica", "courier", "times") or
+   * `UNICODE_FONT_FAMILY`, the embedded Unicode font that renders accents.
    * @default "Helvetica"
    */
   fontFamily?: string;
@@ -177,6 +180,7 @@ export class PDFGenerator {
       });
     }
 
+    registerUnicodeFont(this.pdf, this.options.fontFamily);
     this.applyFont();
   }
 

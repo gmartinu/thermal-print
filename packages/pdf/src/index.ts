@@ -405,5 +405,6 @@ export type * from "./types";
 
 // Export generator and traverser for advanced usage
 export { PDFGenerator, PDFTraverser };
+export { UNICODE_FONT_FAMILY } from "./fonts/register";
 export type { PDFGeneratorOptions };
 

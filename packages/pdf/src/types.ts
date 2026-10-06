@@ -145,7 +145,7 @@ export interface VectorPDFOptions {
   lineHeight?: number;
 
   /**
-   * Font family (must be available in jsPDF)
+   * Font family: a jsPDF built-in or `UNICODE_FONT_FAMILY` (embedded Unicode font, renders accents)
    * @default "Helvetica"
    */
   fontFamily?: string;
