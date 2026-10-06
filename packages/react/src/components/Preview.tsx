@@ -33,7 +33,7 @@ export function Preview({
   showRuler = false,
   scale = 1,
   style
-}: PreviewProps) {
+}: PreviewProps): ReactElement {
   // Render the tree (but we'll display the original React tree for preview)
   // This ensures the components are properly structured
   convertToPrintNodes(children);
