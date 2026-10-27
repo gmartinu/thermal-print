@@ -147,9 +147,12 @@ Converts React/CSS-like styles to ESC/POS commands:
    a golden to regenerate. See [docs/STYLING.md](docs/STYLING.md).
 6. **Accents (DEV-2803)**: `printAccents` (default off) is the only thing that
    sends `ESC t` (CP860); off must emit no code-page command. The CP860 map in
-   `encodings/cp860.ts` is the official IBM table; tests in
-   `packages/escpos/test/escpos-accents.test.ts`. The caller stops
-   transliterating to ASCII when it turns this on.
+   `encodings/cp860.ts` is the official IBM table, used only when the option is
+   on; tests in `packages/escpos/test/escpos-accents.test.ts`. Off (text bytes
+   and column-width math) uses the frozen pre-#13 map in
+   `encodings/cp860-legacy.ts`, guarded by
+   `packages/escpos/test/escpos-accents-off-legacy.test.ts` — never "fix" that
+   table. The caller stops transliterating to ASCII when it turns this on.
 
 ## TypeScript Configuration
 
