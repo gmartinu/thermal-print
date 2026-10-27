@@ -108,6 +108,11 @@ export class ESCPOSGenerator {
   /** Whether the next addText() starts a new printed line (so it gets the indent). */
   private atLineStart = true;
 
+  private printAccents: boolean;
+
+  /** Encoder matching the selected code page, for byte-accurate width math. */
+  encodeForWidth = (text: string): number[] => encodeText(text, this.printAccents);
+
   constructor(
     paperWidth = 42,
     encoding = "cp860",
@@ -118,6 +123,7 @@ export class ESCPOSGenerator {
     styleMode: StyleMode = "legacy",
     printAccents = false
   ) {
+    this.printAccents = printAccents;
     this.compact = compact;
     this.styleMode = styleMode;
     this.buffer = new ESCPOSBuffer();
@@ -309,7 +315,7 @@ export class ESCPOSGenerator {
     if (this.atLineStart || this.context.currentAlign === "left") return;
     const right = this.paddingChars(this.reservedRight);
     if (right > 0) {
-      this.buffer.pushArray(encodeText(" ".repeat(right)));
+      this.buffer.pushArray(encodeText(" ".repeat(right), this.printAccents));
     }
   }
 
@@ -393,7 +399,7 @@ export class ESCPOSGenerator {
   addText(text: string): void {
     if (text) {
       const indent = this.atLineStart ? this.indentChars() : 0;
-      const encodedBytes = encodeText(indent > 0 ? " ".repeat(indent) + text : text);
+      const encodedBytes = encodeText(indent > 0 ? " ".repeat(indent) + text : text, this.printAccents);
       this.buffer.pushArray(encodedBytes);
       this.atLineStart = false;
     }

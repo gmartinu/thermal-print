@@ -9,6 +9,7 @@
  */
 
 import { encodeCP860 } from "../encodings/cp860";
+import { encodeCP860Legacy } from "../encodings/cp860-legacy";
 
 // ============================================================================
 // CONTROL CHARACTERS
@@ -197,10 +198,11 @@ export const generateRasterImage = (
  * Text encoding helper
  * Converts string to CP860 byte array for Brazilian Portuguese thermal printers
  */
-export const encodeText = (text: string): number[] => {
+export const encodeText = (text: string, printAccents = false): number[] => {
   // CP860 is the standard codepage for Portuguese thermal printers
   // Supports: ç Ç á é í ó ú à ã õ â ê ô and other Portuguese characters
-  return encodeCP860(text);
+  // printAccents off keeps the legacy map so bytes never change for the printers in the field (DEV-2803).
+  return printAccents ? encodeCP860(text) : encodeCP860Legacy(text);
 };
 
 // ============================================================================

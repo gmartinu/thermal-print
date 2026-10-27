@@ -1,4 +1,4 @@
-import { encodeCP860 } from "./encodings/cp860";
+import { encodeCP860Legacy } from "./encodings/cp860-legacy";
 import { TextStyle, ViewStyle } from "@thermal-print/core";
 
 /**
@@ -331,16 +331,17 @@ export function distributeGaps(contentWidth: number, totalWidth: number, gapCoun
 export function alignTextInColumn(
   text: string,
   width: number,
-  align: "left" | "center" | "right"
+  align: "left" | "center" | "right",
+  encode: (text: string) => number[] = encodeCP860Legacy
 ): string {
   // Get actual byte length when encoded to CP860
-  let encodedLength = encodeCP860(text).length;
+  let encodedLength = encode(text).length;
   let truncatedText = text;
 
   // Truncate if too long (character by character until it fits)
   while (encodedLength > width && truncatedText.length > 0) {
     truncatedText = truncatedText.substring(0, truncatedText.length - 1);
-    encodedLength = encodeCP860(truncatedText).length;
+    encodedLength = encode(truncatedText).length;
   }
 
   // Calculate padding based on actual encoded byte length
