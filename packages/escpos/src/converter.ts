@@ -42,6 +42,7 @@ export interface PrintNodeToESCPOSOptions {
   fontMode?: FontMode; // Global font mode — overrides fontSize-based font selection (default: 'medium')
   compact?: boolean; // Minimal line spacing (0 dots) — works with any fontMode (default: false)
   styleMode?: StyleMode; // How much component styling to honour (default: 'legacy')
+  printAccents?: boolean; // Select CP860 (ESC t) so accented text prints; off = no ESC t (default: false). The caller must stop transliterating to ASCII.
 }
 
 /**
@@ -115,6 +116,7 @@ export async function printNodesToESCPOS(
     fontMode = "medium", // Default to Font A 42 cols
     compact = false, // Minimal line spacing
     styleMode = "legacy", // Byte-compatible with pre-DEV-2390 output
+    printAccents = false, // DEV-2803: off = byte-identical to before
   } = options || {};
 
   // Determine paperWidth based on fontMode (unless explicitly overridden)
@@ -146,7 +148,8 @@ export async function printNodesToESCPOS(
     commandAdapter,
     fontMode,
     compact,
-    styleMode
+    styleMode,
+    printAccents
   );
 
   // Traverse tree and generate commands

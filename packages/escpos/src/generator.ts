@@ -115,7 +115,8 @@ export class ESCPOSGenerator {
     commandAdapter?: CommandAdapter,
     fontMode: FontMode = "medium",
     compact = false,
-    styleMode: StyleMode = "legacy"
+    styleMode: StyleMode = "legacy",
+    printAccents = false
   ) {
     this.compact = compact;
     this.styleMode = styleMode;
@@ -151,6 +152,13 @@ export class ESCPOSGenerator {
 
     // Initialize printer using command adapter
     this.buffer.pushArray(this.commandAdapter.getInitCommand());
+
+    // DEV-2803: accented text is only correct if the printer is on CP860.
+    // Off (default) sends nothing, so the bytes stay identical to before.
+    if (printAccents) {
+      const codePage = this.commandAdapter.getPortugueseCodePageCommand?.();
+      if (codePage) this.buffer.pushArray(codePage);
+    }
   }
 
   /**

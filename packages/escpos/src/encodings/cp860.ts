@@ -10,59 +10,57 @@
 // CP860 character map (0x80-0xFF)
 // 0x00-0x7F are standard ASCII (unchanged)
 const CP860_MAP: { [key: string]: number } = {
-  // Portuguese special characters
-  ç: 0x87, // Latin small letter c with cedilla
-  Ç: 0x80, // Latin capital letter C with cedilla
-  ü: 0x81, // Latin small letter u with diaeresis
-  é: 0x82, // Latin small letter e with acute
-  â: 0x83, // Latin small letter a with circumflex
-  ã: 0x84, // Latin small letter a with tilde
-  à: 0x85, // Latin small letter a with grave
-  // á: 0x86, // REMOVED: Wrong CP860 mapping. Correct mapping is 0xa0 (see below)
-  ê: 0x88, // Latin small letter e with circumflex
-  ë: 0x89, // Latin small letter e with diaeresis
-  è: 0x8a, // Latin small letter e with grave
-  ï: 0x8b, // Latin small letter i with diaeresis
-  î: 0x8c, // Latin small letter i with circumflex
-  ì: 0x8d, // Latin small letter i with grave
-  Ã: 0x8e, // Latin capital letter A with tilde
-  Á: 0x8f, // Latin capital letter A with acute
+  // 0x80-0xAF follow the official IBM CP860 (Portuguese) table.
+  Ç: 0x80,
+  ü: 0x81,
+  é: 0x82,
+  â: 0x83,
+  ã: 0x84,
+  à: 0x85,
+  Á: 0x86,
+  ç: 0x87,
+  ê: 0x88,
+  Ê: 0x89,
+  è: 0x8a,
+  Í: 0x8b,
+  Ô: 0x8c,
+  ì: 0x8d,
+  Ã: 0x8e,
+  Â: 0x8f,
 
-  É: 0x90, // Latin capital letter E with acute
-  æ: 0x91, // Latin small letter ae
-  Æ: 0x92, // Latin capital letter AE
-  ô: 0x93, // Latin small letter o with circumflex
-  ö: 0x94, // Latin small letter o with diaeresis
-  ò: 0x95, // Latin small letter o with grave
-  û: 0x96, // Latin small letter u with circumflex
-  ù: 0x97, // Latin small letter u with grave
-  ÿ: 0x98, // Latin small letter y with diaeresis
-  Ö: 0x99, // Latin capital letter O with diaeresis
-  Ü: 0x9a, // Latin capital letter U with diaeresis
-  ø: 0x9b, // Latin small letter o with stroke
-  "£": 0x9c, // Pound sign
-  Ø: 0x9d, // Latin capital letter O with stroke
-  "×": 0x9e, // Multiplication sign
-  ƒ: 0x9f, // Latin small letter f with hook
+  É: 0x90,
+  À: 0x91,
+  È: 0x92,
+  ô: 0x93,
+  õ: 0x94,
+  ò: 0x95,
+  Ú: 0x96,
+  ù: 0x97,
+  Ì: 0x98,
+  Õ: 0x99,
+  Ü: 0x9a,
+  "¢": 0x9b,
+  "£": 0x9c,
+  Ù: 0x9d,
+  "₧": 0x9e,
+  Ó: 0x9f,
 
-  á: 0xa0, // Latin small letter a with acute
-  í: 0xa1, // Latin small letter i with acute
-  ó: 0xa2, // Latin small letter o with acute
-  ú: 0xa3, // Latin small letter u with acute
-  ñ: 0xa4, // Latin small letter n with tilde
-  Ñ: 0xa5, // Latin capital letter N with tilde
-  ª: 0xa6, // Feminine ordinal indicator
-  º: 0xa7, // Masculine ordinal indicator
-  // NOTE: Capital Ú doesn't exist in CP860, map to regular U
-  Ú: 0x55, // Latin capital U (fallback - CP860 doesn't have Ú)
-  "¿": 0xa8, // Inverted question mark
-  "®": 0xa9, // Registered sign
-  "¬": 0xaa, // Not sign
-  "½": 0xab, // Vulgar fraction one half
-  "¼": 0xac, // Vulgar fraction one quarter
-  "¡": 0xad, // Inverted exclamation mark
-  "«": 0xae, // Left-pointing double angle quotation mark
-  "»": 0xaf, // Right-pointing double angle quotation mark
+  á: 0xa0,
+  í: 0xa1,
+  ó: 0xa2,
+  ú: 0xa3,
+  ñ: 0xa4,
+  Ñ: 0xa5,
+  ª: 0xa6,
+  º: 0xa7,
+  "¿": 0xa8,
+  Ò: 0xa9,
+  "¬": 0xaa,
+  "½": 0xab,
+  "¼": 0xac,
+  "¡": 0xad,
+  "«": 0xae,
+  "»": 0xaf,
 
   "░": 0xb0, // Light shade
   "▒": 0xb1, // Medium shade
@@ -147,8 +145,7 @@ const CP860_MAP: { [key: string]: number } = {
   ⁿ: 0xfc, // Superscript n
   "²": 0xfd, // Superscript 2
   "■": 0xfe, // Black square
-  "\u00A0": 0x20, // Non-breaking space (U+A0) -> regular space
-  " ": 0xff, // Non-breaking space alternative
+  "\u00A0": 0xff, // Non-breaking space (CP860 0xFF)
 };
 
 /**

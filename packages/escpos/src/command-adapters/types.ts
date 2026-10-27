@@ -100,4 +100,11 @@ export interface CommandAdapter {
    *   requested font.
    */
   getLegacyDefaultFont?(): 0 | 1;
+
+  /**
+   * `ESC t n` selecting the CP860 (Portuguese) code page, with the number this
+   * protocol uses for it (ESC/POS: 3, ESC/Bematech: 4). Sent right after init
+   * only when `printAccents` is on (DEV-2803).
+   */
+  getPortugueseCodePageCommand?(): number[];
 }

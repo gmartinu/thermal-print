@@ -28,6 +28,10 @@ export class ESCBematechCommandAdapter implements CommandAdapter {
     return { width: 2, height: 2 };
   }
 
+  getPortugueseCodePageCommand(): number[] {
+    return ESCBema.setCodePage(ESCBema.CodePage.CP860);
+  }
+
   getInitCommand(): number[] {
     // ESC @ - Reset printer
     return ESCBema.INIT;

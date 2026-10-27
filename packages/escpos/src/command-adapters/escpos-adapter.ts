@@ -28,6 +28,10 @@ export class ESCPOSCommandAdapter implements CommandAdapter {
     return { width: 2, height: 2 };
   }
 
+  getPortugueseCodePageCommand(): number[] {
+    return ESCPOS.setCodePage(ESCPOS.CodePage.CP860);
+  }
+
   getInitCommand(): number[] {
     const commands: number[] = [];
 
