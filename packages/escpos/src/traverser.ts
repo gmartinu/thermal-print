@@ -343,7 +343,7 @@ export class TreeTraverser {
     if (!style.perCellStyles) {
       let rowText = "";
       for (let i = 0; i < cells.length; i++) {
-        rowText += alignTextInColumn(columnLines[i][lineIdx] || "", capacities[i], cells[i].align);
+        rowText += alignTextInColumn(columnLines[i][lineIdx] || "", capacities[i], cells[i].align, this.generator.encodeForWidth);
       }
       this.generator.addTextLine(rowText);
       return;
@@ -352,7 +352,7 @@ export class TreeTraverser {
     for (let i = 0; i < cells.length; i++) {
       this.generator.setPrintState(style.cellLevels[i], style.cellBolds[i]);
       this.generator.addText(
-        alignTextInColumn(columnLines[i][lineIdx] || "", capacities[i], cells[i].align)
+        alignTextInColumn(columnLines[i][lineIdx] || "", capacities[i], cells[i].align, this.generator.encodeForWidth)
       );
     }
     // Back to the row font BEFORE closing the line, so the right inset is

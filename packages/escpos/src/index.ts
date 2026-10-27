@@ -51,6 +51,7 @@ export type { ESCPOSFontSize, FontLevel } from './styles';
 
 // Encodings
 export { encodeCP860 } from './encodings/cp860';
+export { encodeCP860Legacy } from './encodings/cp860-legacy';
 
 // Types
 export type * from './types';
