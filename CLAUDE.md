@@ -145,6 +145,11 @@ Converts React/CSS-like styles to ESC/POS commands:
    `styleMode: 'rico'`; `'legacy'` must stay byte-identical. Enforced by
    `packages/escpos/test/goldens/legacy-*.snap` — a diff there is a leak, never
    a golden to regenerate. See [docs/STYLING.md](docs/STYLING.md).
+6. **Accents (DEV-2803)**: `printAccents` (default off) is the only thing that
+   sends `ESC t` (CP860); off must emit no code-page command. The CP860 map in
+   `encodings/cp860.ts` is the official IBM table; tests in
+   `packages/escpos/test/escpos-accents.test.ts`. The caller stops
+   transliterating to ASCII when it turns this on.
 
 ## TypeScript Configuration
 
