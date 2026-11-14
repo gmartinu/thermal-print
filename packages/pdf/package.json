@@ -1,6 +1,6 @@
 {
   "name": "@thermal-print/pdf",
-  "version": "0.4.1-beta.8",
+  "version": "0.4.1-beta.9",
   "type": "module",
   "description": "PDF generation for thermal printers - vector and raster modes",
   "main": "dist/index.js",
@@ -32,7 +32,7 @@
   "dependencies": {
     "@thermal-print/core": "workspace:*",
     "html2canvas": "1.4.1",
-    "jspdf": "2.5.2"
+    "jspdf": "4.2.1"
   },
   "devDependencies": {
     "typescript": "5.9.3",
