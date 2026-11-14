@@ -277,6 +277,9 @@ The `@thermal-print/pdf` package provides vector PDF generation from PrintNode t
 
 `pnpm --filter @thermal-print/pdf test` (node:test via tsx, no extra runner).
 Wrapping/row-height regressions live in `packages/pdf/test/pdf-wrap.test.ts`.
+Absolute layout (widths, breaks, image boxes, page height) is pinned by
+`packages/pdf/test/pdf-golden.test.ts` — a diff there after a jsPDF bump is a
+regression to investigate, never a golden to re-capture (DEV-2830).
 
 ### Common Issues
 
